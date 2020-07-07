@@ -1828,12 +1828,14 @@ that there are 3 bits that are always 0. On 32 bit platforms, the 2 least
 significant bits are always 0.</p>
 <pre><code>  64..............48..............32..............16...........xxx
 0b1000001111011101101100101010101010010101010011110110101111101000
+                                                               / |
+                                                              /  |
                                                             unused
 </code></pre>
 <p>When dereferencing a pointer, these bits must always be zero. But we <em>can</em> use
-them in pointers at to rest store some type identifier! We'll limit ourselves to
-2 bits of type identifier so as to not complicate our code in distinguishing
-between 32 and 64 bit platforms.</p>
+them in pointers at rest to store a limited type identifier! We'll limit
+ourselves to 2 bits of type identifier so as to not complicate our code in
+distinguishing between 32 and 64 bit platforms<sup class="footnote-reference"><a href="#1">1</a></sup>.</p>
 <p>Given we'll only have 4 possible types we can id directly from a pointer,
 we'll still need to fall back on the object header for types that don't fit
 into this range.</p>
@@ -1844,7 +1846,82 @@ it won't be safe to dereference it. Then we'll need a safe abstraction over
 that type to make it safe to dereference.</p>
 <p>In the previous chapter we defined a pointer type that retained compile time
 type knowledge. We will still need to be able to resolve to concrete types at
-runtime.</p>
+runtime. We can use our previously defined pointer type, though:</p>
+<pre><code class="language-rust ignore">#[derive(Copy, Clone)]
+pub enum Value&lt;'guard&gt; {
+    Nil,
+    Pair(ScopedPtr&lt;'guard, Pair&gt;),
+    Symbol(ScopedPtr&lt;'guard, Symbol&gt;),
+}
+</code></pre>
+<p>Here we wrapped possible variants of <code>ScopedPtr&lt;T&gt;</code> in an enum, and we've
+started by defining two more new types, <code>Pair</code> and <code>Symbol</code>, that we'll go
+on to explain shortly.</p>
+<p>You probably noticed that <code>Value</code> is essentially a fat pointer. It is composed
+of a set of <code>ScopedPtr&lt;T&gt;</code> values, each of which should only require a single
+word, and an enum discriminant value, which will also, due to alignment,
+require a word. We'll end up with a lot more discriminants so at this point,
+we can't do tagged pointer trickery, the discriminant value will not fit into
+2 bits.</p>
+<p>This enum, however, since it wraps <code>ScopedPtr&lt;T&gt;</code> and has the same requirement
+for an explicit lifetime, is Safe To Dereference.</p>
+<p>Since this type occupies the same space as a fat pointer, it isn't the type
+we want for storing pointers at rest. Let's look at the compact tagged pointer
+type now:</p>
+<pre><code class="language-rust ignore">#[derive(Copy, Clone)]
+pub union TaggedPtr {
+    tag: usize,
+    number: isize,
+    symbol: NonNull&lt;Symbol&gt;,
+    pair: NonNull&lt;Pair&gt;,
+    object: NonNull&lt;()&gt;,
+}
+</code></pre>
+<p>Here we have a <code>union</code> type, making this an unsafe representation of a pointer.
+The <code>tag</code> value will be constrained to the values 0, 1, 2 or 3, which will
+determine which of the next four possible members should be accessed. Members
+will have to be bit-masked to access their correct values.</p>
+<p>These tags and masks are defined as:</p>
+<pre><code class="language-rust ignore">const TAG_MASK: usize = 0x3;
+pub const TAG_NUMBER: usize = 0x0;
+pub const TAG_SYMBOL: usize = 0x1;
+pub const TAG_PAIR: usize = 0x2;
+pub const TAG_OBJECT: usize = 0x3;
+const PTR_MASK: usize = !0x3;
+</code></pre>
+<p>As you can see, we've allocated a tag for a <code>Symbol</code> type, a <code>Pair</code> type and
+one for a numeric type. The fourth member indicates an object whose type
+must be determined from the type id in the object header.</p>
+<p>Making space for an inline integer type is a not-uncommon use of a tag. It
+means any integer arithmetic that fits within the available bits will not
+require memory lookups into the heap to retrieve operands. In our case we've
+defined the numeric type as an <code>isize</code>. Since the 2 least significant bits
+are used for the tag, we will have to right-shift the value by 2 to extract
+the correct integer value.</p>
+<p>Thus you can see from the choice of embedded tag values, we've optimized for
+identifying <code>Pair</code>s and <code>Symbol</code>s and integer math.</p>
+<p>Translating between <code>Value</code> and <code>TaggedPtr</code> will be made easier by creating
+an intermediate type that represents all types as an enum but doesn't require
+a valid lifetime.</p>
+<pre><code class="language-rust.ignore">#[derive(Copy, Clone)]
+pub enum FatPtr {
+    Nil,
+    Pair(RawPtr&lt;Pair&gt;),
+    Symbol(RawPtr&lt;Symbol&gt;),
+}
+</code></pre>
+<p>In this representation we encapsulate the <code>RawPtr&lt;T&gt;</code> type that the allocator
+API gives us. We will also implement <code>From&lt;FatPtr&gt;</code> for <code>TaggedPtr</code> and <code>Value</code>
+to convert to the final two possible pointer representations.</p>
+<hr />
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>There are other pointer tagging schemes, notably the use of &quot;spare&quot; NaN
+bit patterns in 64 bit floating point values. Further, <em>which</em> types are
+best represented by the tag bits is highly language dependent. Some languages
+use them for garbage collection information while others may use them for
+still other types hidden from the language user. In the interest of clarity,
+we'll stick to a simple scheme.</p>
+</div>
 <h1><a class="header" href="#parsing" id="parsing">Parsing</a></h1>
 
                     </main>
