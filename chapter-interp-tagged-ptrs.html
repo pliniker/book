@@ -208,32 +208,30 @@ that type to make it safe to dereference.</p>
 <p>We introduced the object header traits in the earlier chapter
 <a href="./chapter-allocation-api.html">Defining the allocation API</a>. The chapter
 explained how the object header is the responsibility of the interpreter to
-implement. We need to know what this should be, now, and we'll focus on the
-type identification parts in this chapter. Other aspects of the header will
-be covered in the garbage collection part of the book.</p>
-<p>The allocator API does not prescribe how to implement type identification,
-it merely requires that the type identifier type must implement the
-<code>AllocTypeId</code> trait.</p>
-<p>We'll use an <code>enum</code> for all our runtime types:</p>
+implement.</p>
+<p>Now that we need to implement type identification, we need the object header
+implementation first.</p>
+<p>The allocator API requires that the type identifier implement the
+<code>AllocTypeId</code> trait. We'll use an <code>enum</code> to identify for all our runtime types:</p>
 <pre><code class="language-rust ignore">#[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TypeList {
-    Pair,
-    Symbol,
-    NumberObject,
-    Text,
-    Array, // type id for array backing bytes
-    List,
+    ArrayBackingBytes,
+    ArrayOpcode,
     ArrayU8,
     ArrayU16,
     ArrayU32,
-    Dict,
-    ArrayOpcode,
     ByteCode,
-    InstructionStream,
-    Function,
-    Partial,
     CallFrameList,
+    Dict,
+    Function,
+    InstructionStream,
+    List,
+    NumberObject,
+    Pair,
+    Partial,
+    Symbol,
+    Text,
     Thread,
     Upvalue,
 }
@@ -241,9 +239,11 @@ pub enum TypeList {
 // Mark this as a Stickyimmix type-identifier type
 impl AllocTypeId for TypeList {}
 </code></pre>
-<p>As you can see we have a number of types that our runtime will use.</p>
+<p>Given that the allocator API requires every object that can be allocated to
+have an associated type id <code>const</code>, this enum represents every type that
+can be allocated and that we will go on to describe in this book.</p>
 <p>This type identifier <code>enum</code> is a member of the <code>ObjectHeader</code> struct along
-with a few other members that our Immix implementation requires.</p>
+with a few other members that our Immix implementation requires:</p>
 <pre><code class="language-rust ignore">pub struct ObjectHeader {
     mark: Mark,
     size_class: SizeClass,
@@ -251,29 +251,48 @@ with a few other members that our Immix implementation requires.</p>
     size_bytes: u32,
 }
 </code></pre>
-<h3><a class="header" href="#the-safe-abstraction" id="the-safe-abstraction">The safe abstraction</a></h3>
+<p>The rest of the header members will be the topic of the later garbage
+collection part of the book.</p>
+<blockquote>
+<p><em><strong>Note:</strong></em> While we are using an <code>enum</code> for clarity, we could choose other
+means of type identification that would be more flexible. For example,
+we could generate a lookup table of compile-time generated ids to
+trait objects.</p>
+</blockquote>
+<h3><a class="header" href="#a-safe-pointer-abstraction" id="a-safe-pointer-abstraction">A safe pointer abstraction</a></h3>
 <p>Starting with the safe abstraction, a type that can represent one of multiple
 types at runtime is obviously the <code>enum</code>.
 We can wrap possible <code>ScopedPtr&lt;T&gt;</code> types in an <code>enum</code>:</p>
 <pre><code class="language-rust ignore">#[derive(Copy, Clone)]
 pub enum Value&lt;'guard&gt; {
+    ArrayU8(ScopedPtr&lt;'guard, ArrayU8&gt;),
+    ArrayU16(ScopedPtr&lt;'guard, ArrayU16&gt;),
+    ArrayU32(ScopedPtr&lt;'guard, ArrayU32&gt;),
+    Dict(ScopedPtr&lt;'guard, Dict&gt;),
+    Function(ScopedPtr&lt;'guard, Function&gt;),
+    List(ScopedPtr&lt;'guard, List&gt;),
     Nil,
+    Number(isize),
+    NumberObject(ScopedPtr&lt;'guard, NumberObject&gt;),
     Pair(ScopedPtr&lt;'guard, Pair&gt;),
+    Partial(ScopedPtr&lt;'guard, Partial&gt;),
     Symbol(ScopedPtr&lt;'guard, Symbol&gt;),
+    Text(ScopedPtr&lt;'guard, Text&gt;),
+    Upvalue(ScopedPtr&lt;'guard, Upvalue&gt;),
 }
 </code></pre>
-<p>We've also referenced two new types, <code>Pair</code> and <code>Symbol</code>, that we'll go on to
-explain in the next chapter.</p>
-<p>You probably noticed that <code>Value</code> <em>is</em> the fat pointer we discussed earlier.
-It is composed of a set of <code>ScopedPtr&lt;T&gt;</code>s, each of which should only require
-a single word, and an enum discriminant integer, which will also, due to
-alignment, require a word.</p>
-<p>We'll end up with a lot more discriminants so at this point, we can't do
-tagged pointer trickery, the discriminant value will not fit into 2 bits.</p>
-<p>This enum, however, since it wraps <code>ScopedPtr&lt;T&gt;</code> and has the same requirement
+<p>Notice that this <code>enum</code> does <em>not</em> include all the same types that were
+listed above in <code>TypeList</code>. Only the types that can be passed dynamically at
+runtime need to be represented here. Other types not listed here are known
+at runtime.</p>
+<p>You probably also noticed that <code>Value</code> <em>is</em> the fat pointer we discussed
+earlier. It is composed of a set of <code>ScopedPtr&lt;T&gt;</code>s, each of which should
+only require a single word, and an enum discriminant integer, which will
+also, due to alignment, require a word.</p>
+<p>This enum, since it wraps <code>ScopedPtr&lt;T&gt;</code> and has the same requirement
 for an explicit lifetime, is Safe To Dereference.</p>
 <p>As this type occupies the same space as a fat pointer, it isn't the type
-we want for storing pointers at rest.</p>
+we want for storing pointers at rest, though.</p>
 <p>For that type, let's look at the compact tagged pointer type now.</p>
 <h3><a class="header" href="#what-lies-beneath" id="what-lies-beneath">What lies beneath</a></h3>
 <p>Below we have a <code>union</code> type, making this an unsafe representation of a pointer.
@@ -290,8 +309,17 @@ pub union TaggedPtr {
 }
 </code></pre>
 <p>As you can see, we've allocated a tag for a <code>Symbol</code> type, a <code>Pair</code> type and
-one for a numeric<sup class="footnote-reference"><a href="#2">2</a></sup> type. The fourth member indicates an object whose type
+one for a numeric type. The fourth member indicates an object whose type
 must be determined from the type id in the object header.</p>
+<blockquote>
+<p><em><strong>Note:</strong></em> Making space for an inline integer is a common use of a tag. It
+means any integer arithmetic that fits within the available bits will not
+require memory lookups into the heap to retrieve operands. In our case we've
+defined the numeric type as an <code>isize</code>. Since the 2 least significant bits
+are used for the tag, we will have to right-shift the value by 2 to extract
+the correct integer value. We'll go into this implementation in more depth
+in a later chapter.</p>
+</blockquote>
 <p>The tags and masks are defined as:</p>
 <pre><code class="language-rust ignore">const TAG_MASK: usize = 0x3;
 pub const TAG_NUMBER: usize = 0x0;
@@ -309,9 +337,20 @@ a valid lifetime. This type will be useful because it is most closely
 ergonomic with the allocator API and the object header type information.</p>
 <pre><code class="language-rust.ignore">#[derive(Copy, Clone)]
 pub enum FatPtr {
+    ArrayU8(RawPtr&lt;ArrayU8&gt;),
+    ArrayU16(RawPtr&lt;ArrayU16&gt;),
+    ArrayU32(RawPtr&lt;ArrayU32&gt;),
+    Dict(RawPtr&lt;Dict&gt;),
+    Function(RawPtr&lt;Function&gt;),
+    List(RawPtr&lt;List&gt;),
     Nil,
+    Number(isize),
+    NumberObject(RawPtr&lt;NumberObject&gt;),
     Pair(RawPtr&lt;Pair&gt;),
+    Partial(RawPtr&lt;Partial&gt;),
     Symbol(RawPtr&lt;Symbol&gt;),
+    Text(RawPtr&lt;Text&gt;),
+    Upvalue(RawPtr&lt;Upvalue&gt;),
 }
 </code></pre>
 <p>Next we'll look at how to convert between <code>FatPtr</code>, <code>TaggedPtr</code> and <code>Value</code>.</p>
@@ -329,12 +368,35 @@ similar method that can:</p>
 <pre><code class="language-rust ignore">impl FatPtr {
     pub fn as_value&lt;'guard&gt;(&amp;self, guard: &amp;'guard dyn MutatorScope) -&gt; Value&lt;'guard&gt; {
         match self {
+            FatPtr::ArrayU8(raw_ptr) =&gt; {
+                Value::ArrayU8(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
+            FatPtr::ArrayU16(raw_ptr) =&gt; {
+                Value::ArrayU16(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
+            FatPtr::ArrayU32(raw_ptr) =&gt; {
+                Value::ArrayU32(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
+            FatPtr::Dict(raw_ptr) =&gt; Value::Dict(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
+            FatPtr::Function(raw_ptr) =&gt; {
+                Value::Function(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
+            FatPtr::List(raw_ptr) =&gt; Value::List(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
             FatPtr::Nil =&gt; Value::Nil,
-
+            FatPtr::Number(num) =&gt; Value::Number(*num),
+            FatPtr::NumberObject(raw_ptr) =&gt; {
+                Value::NumberObject(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
             FatPtr::Pair(raw_ptr) =&gt; Value::Pair(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
-
+            FatPtr::Partial(raw_ptr) =&gt; {
+                Value::Partial(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
             FatPtr::Symbol(raw_ptr) =&gt; {
                 Value::Symbol(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            }
+            FatPtr::Text(raw_ptr) =&gt; Value::Text(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
+            FatPtr::Upvalue(raw_ptr) =&gt; {
+                Value::Upvalue(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
             }
         }
     }
@@ -395,10 +457,20 @@ bits to allow for the tag. We'll apply proper range checking in a later chapter.
 <pre><code class="language-rust ignore">impl From&lt;FatPtr&gt; for TaggedPtr {
     fn from(ptr: FatPtr) -&gt; TaggedPtr {
         match ptr {
+            FatPtr::ArrayU8(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::ArrayU16(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::ArrayU32(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::Dict(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::Function(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::List(raw) =&gt; TaggedPtr::object(raw),
             FatPtr::Nil =&gt; TaggedPtr::nil(),
             FatPtr::Number(value) =&gt; TaggedPtr::number(value),
-            FatPtr::Symbol(raw) =&gt; TaggedPtr::symbol(raw),
+            FatPtr::NumberObject(raw) =&gt; TaggedPtr::object(raw),
             FatPtr::Pair(raw) =&gt; TaggedPtr::pair(raw),
+            FatPtr::Partial(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::Text(raw) =&gt; TaggedPtr::object(raw),
+            FatPtr::Symbol(raw) =&gt; TaggedPtr::symbol(raw),
+            FatPtr::Upvalue(raw) =&gt; TaggedPtr::object(raw),
         }
     }
 }
@@ -408,20 +480,34 @@ bits to allow for the tag. We'll apply proper range checking in a later chapter.
 object header. The header object itself will own the method for returning a
 <code>FatPtr</code>.</p>
 <pre><code class="language-rust ignore">impl ObjectHeader {
-    /// Convert the ObjectHeader address to a FatPtr pointing at the object itself
     pub fn get_object_fatptr(&amp;self) -&gt; FatPtr {
         let ptr_to_self = self.non_null_ptr();
         let object_addr = HeapStorage::get_object(ptr_to_self);
 
         match self.type_id {
-            TypeList::Symbol =&gt; { FatPtr::Pair(RawPtr::untag(object_addr.cast::&lt;Symbol&gt;())) },
-            TypeList::Pair =&gt; { FatPtr::Pair(RawPtr::untag(object_addr.cast::&lt;Pair&gt;())) },
+            TypeList::ArrayU8 =&gt; FatPtr::ArrayU8(RawPtr::untag(object_addr.cast::&lt;ArrayU8&gt;())),
+            TypeList::ArrayU16 =&gt; FatPtr::ArrayU16(RawPtr::untag(object_addr.cast::&lt;ArrayU16&gt;())),
+            TypeList::ArrayU32 =&gt; FatPtr::ArrayU32(RawPtr::untag(object_addr.cast::&lt;ArrayU32&gt;())),
+            TypeList::Dict =&gt; FatPtr::Dict(RawPtr::untag(object_addr.cast::&lt;Dict&gt;())),
+            TypeList::Function =&gt; FatPtr::Function(RawPtr::untag(object_addr.cast::&lt;Function&gt;())),
+            TypeList::List =&gt; FatPtr::List(RawPtr::untag(object_addr.cast::&lt;List&gt;())),
+            TypeList::NumberObject =&gt; {
+                FatPtr::NumberObject(RawPtr::untag(object_addr.cast::&lt;NumberObject&gt;()))
+            }
+            TypeList::Pair =&gt; FatPtr::Pair(RawPtr::untag(object_addr.cast::&lt;Pair&gt;())),
+            TypeList::Partial =&gt; FatPtr::Partial(RawPtr::untag(object_addr.cast::&lt;Partial&gt;())),
+            TypeList::Symbol =&gt; FatPtr::Symbol(RawPtr::untag(object_addr.cast::&lt;Symbol&gt;())),
+            TypeList::Text =&gt; FatPtr::Text(RawPtr::untag(object_addr.cast::&lt;Text&gt;())),
+            TypeList::Upvalue =&gt; FatPtr::Upvalue(RawPtr::untag(object_addr.cast::&lt;Upvalue&gt;())),
 
+            // Other types not represented by FatPtr are an error to id here
             _ =&gt; panic!(&quot;Invalid ObjectHeader type tag {:?}!&quot;, self.type_id),
         }
     }
 }
 </code></pre>
+<h2><a class="header" href="#tagged-pointers-in-data-structures" id="tagged-pointers-in-data-structures">Tagged pointers in data structures</a></h2>
+<p>TODO: TaggedCellPtr, TaggedScopedPtr</p>
 <hr />
 <div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
 <p>There are other pointer tagging schemes, notably the use of &quot;spare&quot; NaN
@@ -430,15 +516,6 @@ best represented by the tag bits is highly language dependent. Some languages
 use them for garbage collection information while others may use them for
 still other types hidden from the language user. In the interest of clarity,
 we'll stick to a simple scheme.</p>
-</div>
-<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
-<p>Making space for an inline integer is a common use of a tag. It
-means any integer arithmetic that fits within the available bits will not
-require memory lookups into the heap to retrieve operands. In our case we've
-defined the numeric type as an <code>isize</code>. Since the 2 least significant bits
-are used for the tag, we will have to right-shift the value by 2 to extract
-the correct integer value. We'll go into this implementation in more depth
-in a later chapter.</p>
 </div>
 
                     </main>
