@@ -1899,12 +1899,6 @@ with a few other members that our Immix implementation requires:</p>
 </code></pre>
 <p>The rest of the header members will be the topic of the later garbage
 collection part of the book.</p>
-<blockquote>
-<p><em><strong>Note:</strong></em> While we are using an <code>enum</code> for clarity, we could choose other
-means of type identification that would be more flexible. For example,
-we could generate a lookup table of compile-time generated ids to
-trait objects.</p>
-</blockquote>
 <h3><a class="header" href="#a-safe-pointer-abstraction" id="a-safe-pointer-abstraction">A safe pointer abstraction</a></h3>
 <p>Starting with the safe abstraction, a type that can represent one of multiple
 types at runtime is obviously the <code>enum</code>.
@@ -2001,6 +1995,10 @@ pub enum FatPtr {
 </code></pre>
 <p>Next we'll look at how to convert between <code>FatPtr</code>, <code>TaggedPtr</code> and <code>Value</code>.</p>
 <h2><a class="header" href="#type-conversions" id="type-conversions">Type conversions</a></h2>
+<p>We have three pointer types: <code>Value</code>, <code>FatPtr</code> and <code>TaggedPtr</code>, each which
+has a distinct flavor. We need to be able to convert from one to the other:</p>
+<pre><code>TaggedPtr &lt;-&gt; FatPtr -&gt; Value
+</code></pre>
 <h3><a class="header" href="#fatptr-to-value" id="fatptr-to-value">FatPtr to Value</a></h3>
 <p>We can implement <code>From&lt;FatPtr&gt;</code> for <code>TaggedPtr</code> and <code>Value</code>
 to convert to the final two possible pointer representations.
@@ -2153,7 +2151,40 @@ object header. The header object itself will own the method for returning a
 }
 </code></pre>
 <h2><a class="header" href="#tagged-pointers-in-data-structures" id="tagged-pointers-in-data-structures">Tagged pointers in data structures</a></h2>
-<p>TODO: TaggedCellPtr, TaggedScopedPtr</p>
+<p>In the previous chapter, we defined a <code>CellPtr</code> type that wrapped a <code>RawPtr&lt;T&gt;</code>
+in a <code>Cell&lt;T&gt;</code> so that data structures can contain mutable pointers to other
+objects. Similarly, we'll want something to wrap tagged pointers.</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct TaggedCellPtr {
+    inner: Cell&lt;TaggedPtr&gt;,
+}
+</code></pre>
+<p>We'll also wrap <code>Value</code> in a type <code>TaggedScopedPtr</code> that we'll use similarly
+to <code>ScopedPtr&lt;T&gt;</code>.</p>
+<pre><code class="language-rust ignore">#[derive(Copy, Clone)]
+pub struct TaggedScopedPtr&lt;'guard&gt; {
+    ptr: TaggedPtr,
+    value: Value&lt;'guard&gt;,
+}
+</code></pre>
+<p>This <code>TaggedScopedPtr</code> carries an instance of <code>TaggedPtr</code> <em>and</em> a <code>Value</code>.
+This makes it three words that need to be hefted around to represent a
+pointer. It's suitable for handling pointers that are actively in use in
+the virtual machine instruction interpreter but nowhere else!</p>
+<blockquote>
+<p><em><strong>Note:</strong></em> Redundancy: TaggedScopedPtr and Value are almost
+identical in requirement and functionality. TODO: merge into one type.
+See issue <a href="https://github.com/rust-hosted-langs/book/issues/30">https://github.com/rust-hosted-langs/book/issues/30</a></p>
+</blockquote>
+<h2><a class="header" href="#recap" id="recap">Recap</a></h2>
+<p>In summary, what we created here was a set of pointer types:</p>
+<ul>
+<li>types suitable for storing a pointer at rest - <code>TaggedPtr</code> and <code>TaggedCellPtr</code></li>
+<li>types suitable for dereferencing a pointer - <code>Value</code> and <code>TaggedScopedPtr</code></li>
+<li>a type suitable for intermediating between the two - <code>FatPtr</code></li>
+</ul>
+<p>Next, we'll put these to use in defining the first and simplest data structures
+of our interpreter.</p>
 <hr />
 <div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
 <p>There are other pointer tagging schemes, notably the use of &quot;spare&quot; NaN
