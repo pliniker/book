@@ -172,21 +172,21 @@ concrete object type's methods can be looked up. The generic name for this form
 of pointer is a <em>fat</em> pointer.</p>
 <p>We could easily use a fat pointer type for runtime type identification
 in our interpreter. Each pointer could carry with it an additional word with
-the type id in it, or we could even just use trait objects directly!</p>
+the type id in it, or we could even just use trait objects!</p>
 <p>A dynamically typed language will manage many pointers that must be type
 identified at runtime. Carrying around an extra word per pointer is expensive,
-space-wise.</p>
+space-wise, however.</p>
 <h2><a class="header" href="#tagged-pointers" id="tagged-pointers">Tagged pointers</a></h2>
 <p>Many runtimes implement <a href="1">tagged pointers</a> to avoid the space overhead, while
 partially improving the time overhead of the header type-id lookup.</p>
 <p>In a pointer to any object on the heap, the least most significant bits turn out
 to always be zero due to word or double-word alignment.</p>
-<p>On a 64 bit platform, a pointer will be a 64 bit word. Since objects will be
-at least word-aligned - a pointer will always be a multiple of 8 - that means
-that there are 3 bits that are always 0. On 32 bit platforms, the 2 least
+<p>On a 64 bit platform, a pointer is a 64 bit word. Since objects are
+at least word-aligned, a pointer is always be a multiple of 8 and
+the 3 least significant bits are always 0. On 32 bit platforms, the 2 least
 significant bits are always 0.</p>
 <pre><code>  64..............48..............32..............16...........xxx
-0b1000001111011101101100101010101010010101010011110110101111101000
+0b1111111111111111111111111111111111111111111111111111111111111000
                                                                / |
                                                               /  |
                                                             unused
@@ -203,14 +203,14 @@ into this range.</p>
 need to make a tagged pointer type that will fundamentally be <code>unsafe</code> because
 it won't be safe to dereference it. Then we'll need a safe abstraction over
 that type to make it safe to dereference.</p>
-<p>But first we need to understand the object header.</p>
-<h3><a class="header" href="#the-allocation-object-header" id="the-allocation-object-header">The allocation object header</a></h3>
+<p>But first we need to understand the object header and how we get an object's
+type from it.</p>
+<h3><a class="header" href="#the-object-header" id="the-object-header">The object header</a></h3>
 <p>We introduced the object header traits in the earlier chapter
 <a href="./chapter-allocation-api.html">Defining the allocation API</a>. The chapter
 explained how the object header is the responsibility of the interpreter to
 implement.</p>
-<p>Now that we need to implement type identification, we need the object header
-implementation first.</p>
+<p>Now that we need to implement type identification, we need the object header.</p>
 <p>The allocator API requires that the type identifier implement the
 <code>AllocTypeId</code> trait. We'll use an <code>enum</code> to identify for all our runtime types:</p>
 <pre><code class="language-rust ignore">#[repr(u16)]
@@ -240,10 +240,10 @@ pub enum TypeList {
 impl AllocTypeId for TypeList {}
 </code></pre>
 <p>Given that the allocator API requires every object that can be allocated to
-have an associated type id <code>const</code>, this enum represents every type that
+have an associated type id <code>const</code>, this <code>enum</code> represents every type that
 can be allocated and that we will go on to describe in this book.</p>
-<p>This type identifier <code>enum</code> is a member of the <code>ObjectHeader</code> struct along
-with a few other members that our Immix implementation requires:</p>
+<p>It is a member of the <code>ObjectHeader</code> struct along with a few other members
+that our Immix implementation requires:</p>
 <pre><code class="language-rust ignore">pub struct ObjectHeader {
     mark: Mark,
     size_class: SizeClass,
@@ -254,9 +254,8 @@ with a few other members that our Immix implementation requires:</p>
 <p>The rest of the header members will be the topic of the later garbage
 collection part of the book.</p>
 <h3><a class="header" href="#a-safe-pointer-abstraction" id="a-safe-pointer-abstraction">A safe pointer abstraction</a></h3>
-<p>Starting with the safe abstraction, a type that can represent one of multiple
-types at runtime is obviously the <code>enum</code>.
-We can wrap possible <code>ScopedPtr&lt;T&gt;</code> types in an <code>enum</code>:</p>
+<p>A type that can represent one of multiple types at runtime is obviously the
+<code>enum</code>. We can wrap possible <code>ScopedPtr&lt;T&gt;</code> types like so:</p>
 <pre><code class="language-rust ignore">#[derive(Copy, Clone)]
 pub enum Value&lt;'guard&gt; {
     ArrayU8(ScopedPtr&lt;'guard, ArrayU8&gt;),
@@ -275,19 +274,20 @@ pub enum Value&lt;'guard&gt; {
     Upvalue(ScopedPtr&lt;'guard, Upvalue&gt;),
 }
 </code></pre>
-<p>Notice that this <code>enum</code> does <em>not</em> include all the same types that were
+<p>Note that this definition does <em>not</em> include all the same types that were
 listed above in <code>TypeList</code>. Only the types that can be passed dynamically at
-runtime need to be represented here. Other types not listed here are known
-at runtime.</p>
+runtime need to be represented here. The types not included here are always
+referenced directly by <code>ScopedPtr&lt;T&gt;</code> and are therefore known types at
+compile and run time.</p>
 <p>You probably also noticed that <code>Value</code> <em>is</em> the fat pointer we discussed
 earlier. It is composed of a set of <code>ScopedPtr&lt;T&gt;</code>s, each of which should
-only require a single word, and an enum discriminant integer, which will
+only require a single word, and an <code>enum</code> discriminant integer, which will
 also, due to alignment, require a word.</p>
-<p>This enum, since it wraps <code>ScopedPtr&lt;T&gt;</code> and has the same requirement
+<p>This <code>enum</code>, since it wraps <code>ScopedPtr&lt;T&gt;</code> and has the same requirement
 for an explicit lifetime, is Safe To Dereference.</p>
 <p>As this type occupies the same space as a fat pointer, it isn't the type
-we want for storing pointers at rest, though.</p>
-<p>For that type, let's look at the compact tagged pointer type now.</p>
+we want for storing pointers at rest, though. For that type, let's look at
+the compact tagged pointer type now.</p>
 <h3><a class="header" href="#what-lies-beneath" id="what-lies-beneath">What lies beneath</a></h3>
 <p>Below we have a <code>union</code> type, making this an unsafe representation of a pointer.
 The <code>tag</code> value will be constrained to the values 0, 1, 2 or 3, which will
@@ -325,8 +325,9 @@ const PTR_MASK: usize = !0x3;
 <p>Thus you can see from the choice of embedded tag values, we've optimized for
 fast identification of <code>Pair</code>s and <code>Symbol</code>s and integer math. If we decide to,
 it will be easy to switch to other types to represent in the 2 tag bits.</p>
+<h3><a class="header" href="#connecting-into-the-allocation-api" id="connecting-into-the-allocation-api">Connecting into the allocation API</a></h3>
 <p>Translating between <code>Value</code> and <code>TaggedPtr</code> will be made easier by creating
-an intermediate type that represents all types as an enum but doesn't require
+an intermediate type that represents all types as an <code>enum</code> but doesn't require
 a valid lifetime. This type will be useful because it is most closely
 ergonomic with the allocator API and the object header type information.</p>
 <pre><code class="language-rust.ignore">#[derive(Copy, Clone)]
@@ -347,7 +348,21 @@ pub enum FatPtr {
     Upvalue(RawPtr&lt;Upvalue&gt;),
 }
 </code></pre>
-<p>Next we'll look at how to convert between <code>FatPtr</code>, <code>TaggedPtr</code> and <code>Value</code>.</p>
+<p>We'll extend <code>Heap</code> (see previous chapter) with a method to return a tagged
+pointer on request:</p>
+<pre><code class="language-rust ignore">impl Heap {
+    fn alloc_tagged&lt;T&gt;(&amp;self, object: T) -&gt; Result&lt;TaggedPtr, RuntimeError&gt;
+    where
+        FatPtr: From&lt;RawPtr&lt;T&gt;&gt;,
+        T: AllocObject&lt;TypeList&gt;,
+    {
+        Ok(TaggedPtr::from(FatPtr::from(self.heap.alloc(object)?)))
+    }
+}
+</code></pre>
+<p>In this method it's clear that we implemented <code>From&lt;T&gt;</code> to convert
+between pointer types. Next we'll look at how these conversions are
+implemented.</p>
 <h2><a class="header" href="#type-conversions" id="type-conversions">Type conversions</a></h2>
 <p>We have three pointer types: <code>Value</code>, <code>FatPtr</code> and <code>TaggedPtr</code>, each which
 has a distinct flavor. We need to be able to convert from one to the other:</p>
@@ -474,11 +489,46 @@ bits to allow for the tag. We'll apply proper range checking in a later chapter.
 }
 </code></pre>
 <h3><a class="header" href="#taggedptr-to-fatptr" id="taggedptr-to-fatptr">TaggedPtr to FatPtr</a></h3>
-<p>To convert from a <code>TaggedPtr</code> to the intermediate type, we need to access the
-object header. The header object itself will own the method for returning a
-<code>FatPtr</code>.</p>
+<p>To convert from a <code>TaggedPtr</code> to the intermediate type is implemented in two
+parts: identifying object types from the tag; identifying object types from the
+header where the tag is insufficient.</p>
+<p>Part the first, which requires <code>unsafe</code> due to accessing a <code>union</code> type and
+dereferencing the object header for the <code>TAG_OBJECT</code> discriminant:</p>
+<pre><code class="language-rust ignore">impl From&lt;TaggedPtr&gt; for FatPtr {
+    fn from(ptr: TaggedPtr) -&gt; FatPtr {
+        ptr.into_fat_ptr()
+    }
+}
+
+impl TaggedPtr {
+    fn into_fat_ptr(&amp;self) -&gt; FatPtr {
+        unsafe {
+            if self.tag == 0 {
+                FatPtr::Nil
+            } else {
+                match get_tag(self.tag) {
+                    TAG_NUMBER =&gt; FatPtr::Number(self.number &gt;&gt; 2),
+                    TAG_SYMBOL =&gt; FatPtr::Symbol(RawPtr::untag(self.symbol)),
+                    TAG_PAIR =&gt; FatPtr::Pair(RawPtr::untag(self.pair)),
+
+                    TAG_OBJECT =&gt; {
+                        let untyped_object_ptr = RawPtr::untag(self.object).as_untyped();
+                        let header_ptr = HeapStorage::get_header(untyped_object_ptr);
+
+                        header_ptr.as_ref().get_object_fatptr()
+                    }
+
+                    _ =&gt; panic!(&quot;Invalid TaggedPtr type tag!&quot;),
+                }
+            }
+        }
+    }
+}
+</code></pre>
+<p>And part two, the object header method <code>get_object_fatptr()</code> as seen in the
+code above:</p>
 <pre><code class="language-rust ignore">impl ObjectHeader {
-    pub fn get_object_fatptr(&amp;self) -&gt; FatPtr {
+    pub unsafe fn get_object_fatptr(&amp;self) -&gt; FatPtr {
         let ptr_to_self = self.non_null_ptr();
         let object_addr = HeapStorage::get_object(ptr_to_self);
 
@@ -504,10 +554,23 @@ object header. The header object itself will own the method for returning a
     }
 }
 </code></pre>
-<h2><a class="header" href="#tagged-pointers-in-data-structures" id="tagged-pointers-in-data-structures">Tagged pointers in data structures</a></h2>
+<p>This method contains no unsafe code and yet we've declared it unsafe!</p>
+<p>Manipulating pointer types is not unsafe in of itself, only dereferencing them
+is unsafe and we are not dereferencing them here.</p>
+<p>While we have the safety rails of the <code>enum</code> types to prevent
+<em>invalid</em> types from being returned, we could easily mismatch a <code>TypeList</code> value
+with an incorrect <code>FatPtr</code> value and return an <em>incorrect</em> type. Additionally
+we could forget to untag a pointer, leaving it as an invalid pointer value.</p>
+<p>These possible mistakes could cause undefined behavior and quite likely crash
+the interpreter.</p>
+<p>The compiler will not catch these cases and so this is an area for critical
+scrutiny of correctness! Hence the method is marked unsafe to draw attention.</p>
+<h2><a class="header" href="#using-tagged-pointers-in-data-structures" id="using-tagged-pointers-in-data-structures">Using tagged pointers in data structures</a></h2>
+<p>Finally, we need to see how to use these types in data structures that we'll
+create.</p>
 <p>In the previous chapter, we defined a <code>CellPtr</code> type that wrapped a <code>RawPtr&lt;T&gt;</code>
 in a <code>Cell&lt;T&gt;</code> so that data structures can contain mutable pointers to other
-objects. Similarly, we'll want something to wrap tagged pointers.</p>
+objects. Similarly, we'll want something to wrap tagged pointers:</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct TaggedCellPtr {
     inner: Cell&lt;TaggedPtr&gt;,
@@ -522,15 +585,17 @@ pub struct TaggedScopedPtr&lt;'guard&gt; {
 }
 </code></pre>
 <p>This <code>TaggedScopedPtr</code> carries an instance of <code>TaggedPtr</code> <em>and</em> a <code>Value</code>.
-This makes it three words that need to be hefted around to represent a
-pointer. It's suitable for handling pointers that are actively in use in
-the virtual machine instruction interpreter but nowhere else!</p>
+This tradeoff means that while this type has three words to heft around,
+the <code>TaggedPtr</code> member can be quickly accessed for copying into a
+<code>TaggedCellPtr</code> without needing to down-convert from <code>Value</code>.</p>
+<p>The type is only suitable for handling pointers that actively need to be
+dereferenced due to it's size.</p>
 <blockquote>
 <p><em><strong>Note:</strong></em> Redundancy: TaggedScopedPtr and Value are almost
 identical in requirement and functionality. TODO: merge into one type.
 See issue <a href="https://github.com/rust-hosted-langs/book/issues/30">https://github.com/rust-hosted-langs/book/issues/30</a></p>
 </blockquote>
-<h2><a class="header" href="#recap" id="recap">Recap</a></h2>
+<h2><a class="header" href="#quick-recap" id="quick-recap">Quick recap</a></h2>
 <p>In summary, what we created here was a set of pointer types:</p>
 <ul>
 <li>types suitable for storing a pointer at rest - <code>TaggedPtr</code> and <code>TaggedCellPtr</code></li>
