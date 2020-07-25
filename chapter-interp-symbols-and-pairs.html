@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - Writing Interpreters in Rust: a Guide</title>
+        <title>Symbols and Pairs - Writing Interpreters in Rust: a Guide</title>
         
 
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
@@ -81,7 +81,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html" class="active"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="part-allocators.html"><strong aria-hidden="true">2.</strong> Allocation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-alignment.html"><strong aria-hidden="true">2.1.</strong> Alignment</a></li><li class="chapter-item expanded "><a href="chapter-blocks.html"><strong aria-hidden="true">2.2.</strong> Obtaining blocks of memory</a></li><li class="chapter-item expanded "><a href="chapter-what-is-alloc.html"><strong aria-hidden="true">2.3.</strong> The type of allocation</a></li></ol></li><li class="chapter-item expanded "><a href="part-stickyimmix.html"><strong aria-hidden="true">3.</strong> An allocator: Sticky Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-simple-bump.html"><strong aria-hidden="true">3.1.</strong> Bump allocation</a></li><li class="chapter-item expanded "><a href="chapter-managing-blocks.html"><strong aria-hidden="true">3.2.</strong> Allocating into multiple blocks</a></li><li class="chapter-item expanded "><a href="chapter-allocation-api.html"><strong aria-hidden="true">3.3.</strong> Defining the allocation API</a></li><li class="chapter-item expanded "><a href="chapter-allocation-impl.html"><strong aria-hidden="true">3.4.</strong> Implementing the API</a></li></ol></li><li class="chapter-item expanded "><a href="part-interpreter.html"><strong aria-hidden="true">4.</strong> An interpreter: Eval-rs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-interp-alloc.html"><strong aria-hidden="true">4.1.</strong> Allocating objects and dereferencing safely</a></li><li class="chapter-item expanded "><a href="chapter-interp-tagged-ptrs.html"><strong aria-hidden="true">4.2.</strong> Tagged pointers and object headers</a></li><li class="chapter-item expanded "><a href="chapter-interp-symbols-and-pairs.html"><strong aria-hidden="true">4.3.</strong> Symbols and Pairs</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.4.</strong> TODO - Parsing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.5.</strong> TODO - Arrays</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.6.</strong> TODO - Bytecode</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.7.</strong> TODO - Basic expressions</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.8.</strong> TODO - Numbers</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.9.</strong> TODO - Dicts</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.10.</strong> TODO - Functions</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.11.</strong> TODO - Closures</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.</strong> Garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.1.</strong> TODO - Tracing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.2.</strong> TODO - Sweeping</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.3.</strong> TODO - Recycling blocks</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.</strong> Advanced garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.1.</strong> TODO - Incremental tracing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.2.</strong> TODO - Parallel sweeping</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.3.</strong> TODO - Multi-threaded mutators</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.</strong> Full Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.1.</strong> TODO - Evacuating blocks</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="part-allocators.html"><strong aria-hidden="true">2.</strong> Allocation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-alignment.html"><strong aria-hidden="true">2.1.</strong> Alignment</a></li><li class="chapter-item expanded "><a href="chapter-blocks.html"><strong aria-hidden="true">2.2.</strong> Obtaining blocks of memory</a></li><li class="chapter-item expanded "><a href="chapter-what-is-alloc.html"><strong aria-hidden="true">2.3.</strong> The type of allocation</a></li></ol></li><li class="chapter-item expanded "><a href="part-stickyimmix.html"><strong aria-hidden="true">3.</strong> An allocator: Sticky Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-simple-bump.html"><strong aria-hidden="true">3.1.</strong> Bump allocation</a></li><li class="chapter-item expanded "><a href="chapter-managing-blocks.html"><strong aria-hidden="true">3.2.</strong> Allocating into multiple blocks</a></li><li class="chapter-item expanded "><a href="chapter-allocation-api.html"><strong aria-hidden="true">3.3.</strong> Defining the allocation API</a></li><li class="chapter-item expanded "><a href="chapter-allocation-impl.html"><strong aria-hidden="true">3.4.</strong> Implementing the API</a></li></ol></li><li class="chapter-item expanded "><a href="part-interpreter.html"><strong aria-hidden="true">4.</strong> An interpreter: Eval-rs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-interp-alloc.html"><strong aria-hidden="true">4.1.</strong> Allocating objects and dereferencing safely</a></li><li class="chapter-item expanded "><a href="chapter-interp-tagged-ptrs.html"><strong aria-hidden="true">4.2.</strong> Tagged pointers and object headers</a></li><li class="chapter-item expanded "><a href="chapter-interp-symbols-and-pairs.html" class="active"><strong aria-hidden="true">4.3.</strong> Symbols and Pairs</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.4.</strong> TODO - Parsing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.5.</strong> TODO - Arrays</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.6.</strong> TODO - Bytecode</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.7.</strong> TODO - Basic expressions</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.8.</strong> TODO - Numbers</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.9.</strong> TODO - Dicts</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.10.</strong> TODO - Functions</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.11.</strong> TODO - Closures</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.</strong> Garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.1.</strong> TODO - Tracing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.2.</strong> TODO - Sweeping</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.3.</strong> TODO - Recycling blocks</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.</strong> Advanced garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.1.</strong> TODO - Incremental tracing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.2.</strong> TODO - Parallel sweeping</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.3.</strong> TODO - Multi-threaded mutators</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.</strong> Full Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.1.</strong> TODO - Evacuating blocks</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -147,52 +147,20 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#writing-interpreters-in-rust-a-guide" id="writing-interpreters-in-rust-a-guide">Writing Interpreters in Rust: a Guide</a></h1>
-<h2><a class="header" href="#welcome" id="welcome">Welcome!</a></h2>
-<p>In this book we will walk through the basics of interpreted language
-implementation in Rust with a focus on the challenges that are specifc
-to using Rust.</p>
-<p>At a glance, these are:</p>
-<ul>
-<li>A custom allocator for use in an interpreter</li>
-<li>A safe-Rust wrapper over allocation</li>
-<li>A compiler and VM that interact with the above two layers</li>
-</ul>
-<p>The goal of this book is not to cover a full featured language but rather to
-provide a solid foundation on which you can build further features.</p>
-<h3><a class="header" href="#level-of-difficulty" id="level-of-difficulty">Level of difficulty</a></h3>
-<p>Bob Nystrom's <a href="http://craftinginterpreters.com/">Crafting Interpreters</a>
-is recommended <em>introductory</em> reading to this book for beginners to the topic.
-Bob has produced a high quality, accessible work and while there is
-considerable overlap, in some ways this book builds on Bob's work with some
-additional complexity, optimizations and discussions of Rust's safe vs unsafe.</p>
-<p><strong>We hope you find this book to be informative!</strong></p>
-<h2><a class="header" href="#further-reading-and-other-projects-to-study" id="further-reading-and-other-projects-to-study">Further reading and other projects to study:</a></h2>
-<p>All the links below are acknowledged as inspiration or prior art.</p>
-<h3><a class="header" href="#interpreters" id="interpreters">Interpreters</a></h3>
-<ul>
-<li>Bob Nystrom's <a href="http://craftinginterpreters.com/">Crafting Interpreters</a></li>
-<li><a href="https://inko-lang.org/">The Inko programming language</a></li>
-<li>kyren - <a href="https://github.com/kyren/luster">luster</a> and <a href="https://github.com/kyren/gc-arena">gc-arena</a></li>
-</ul>
-<h3><a class="header" href="#memory-management" id="memory-management">Memory management</a></h3>
-<ul>
-<li>Richard Jones, Anthony Hosking, Elliot Moss - <a href="http://gchandbook.org/">The Garbage Collection Handbook</a></li>
-<li>Stephen M. Blackburn &amp; Kathryn S. McKinley -
-<a href="http://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">Immix: A Mark-Region Garbage Collector with Space Efficiency, Fast Collection, and Mutator Performance</a></li>
-<li>Felix S Klock II - <a href="http://blog.pnkfx.org/blog/2015/10/27/gc-and-rust-part-0-how-does-gc-work/">GC and Rust Part 0: Garbage Collection Background</a></li>
-<li>Felix S Klock II - <a href="http://blog.pnkfx.org/blog/2015/11/10/gc-and-rust-part-1-specing-the-problem/">GC and Rust Part 1: Specifying the Problem</a></li>
-<li>Felix S Klock II - <a href="http://blog.pnkfx.org/blog/2016/01/01/gc-and-rust-part-2-roots-of-the-problem/">GC and Rust Part 2: The Roots of the Problem</a></li>
-</ul>
+                        <h1><a class="header" href="#symbols-and-pairs" id="symbols-and-pairs">Symbols and Pairs</a></h1>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
                         
+                            <a rel="prev" href="chapter-interp-tagged-ptrs.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
 
                         
-                            <a rel="next" href="part-allocators.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next" href="404.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
                         
@@ -204,9 +172,13 @@ additional complexity, optimizations and discussions of Rust's safe vs unsafe.</
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
                 
+                    <a rel="prev" href="chapter-interp-tagged-ptrs.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
 
                 
-                    <a rel="next" href="part-allocators.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next" href="404.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
                 
