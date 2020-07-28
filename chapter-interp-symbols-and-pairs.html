@@ -148,6 +148,36 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#symbols-and-pairs" id="symbols-and-pairs">Symbols and Pairs</a></h1>
+<p>To bootstrap our compiler, we'll parse s-expressions into <code>Symbol</code> ad <code>Pair</code>
+types, where a <code>Pair</code> is essentially a Lisp cons cell.</p>
+<p>The definition of <code>Symbol</code> is just the raw components of a <code>&amp;str</code>:</p>
+<pre><code class="language-rust ignore">#[derive(Copy, Clone)]
+pub struct Symbol {
+    name_ptr: *const u8,
+    name_len: usize,
+}
+</code></pre>
+<p>How we handle these raw components will be covered later in this chapter.
+First, we'll describe the <code>Pair</code> type.</p>
+<h2><a class="header" href="#pairs-of-pointers" id="pairs-of-pointers">Pairs of pointers</a></h2>
+<p>The definition of <code>Pair</code> is</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct Pair {
+    pub first: TaggedCellPtr,
+    pub second: TaggedCellPtr,
+    // Possible source code positions of the first and second values
+    pub first_pos: Cell&lt;Option&lt;SourcePos&gt;&gt;,
+    pub second_pos: Cell&lt;Option&lt;SourcePos&gt;&gt;,
+}
+</code></pre>
+<p>The type of <code>first</code> and <code>second</code> is <code>TaggedCellPtr</code> as seen in the previous
+chapter. This pointer type can point at any runtime supported type. By the
+end of this chapter we'll be able to build a nested linked list of <code>Pair</code>s
+and <code>Symbol</code>s.</p>
+<p>Since this structure will be used for parsing and compiling, the <code>Pair</code>
+<code>struct</code> has a couple of extra members that optionally describe the source
+code line and character number of the values pointed at by <code>first</code> and
+<code>second</code>. We'll come back to these in the chapter on parsing.</p>
 
                     </main>
 
