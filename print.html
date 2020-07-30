@@ -2295,8 +2295,8 @@ pub struct Symbol {
     name_len: usize,
 }
 </code></pre>
-<p>How we handle these raw components will be covered later in this chapter.
-First, we'll describe the <code>Pair</code> type.</p>
+<p>How we handle these raw components will be covered in just a bit.
+First though, we'll delve into the <code>Pair</code> type.</p>
 <h2><a class="header" href="#pairs-of-pointers" id="pairs-of-pointers">Pairs of pointers</a></h2>
 <p>The definition of <code>Pair</code> is</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
@@ -2308,7 +2308,7 @@ pub struct Pair {
     pub second_pos: Cell&lt;Option&lt;SourcePos&gt;&gt;,
 }
 </code></pre>
-<p>The type of <code>first</code> and <code>second</code> is <code>TaggedCellPtr</code> as seen in the previous
+<p>The type of <code>first</code> and <code>second</code> is <code>TaggedCellPtr</code>, as seen in the previous
 chapter. This pointer type can point at any runtime supported type. By the
 end of this chapter we'll be able to build a nested linked list of <code>Pair</code>s
 and <code>Symbol</code>s.</p>
@@ -2316,6 +2316,54 @@ and <code>Symbol</code>s.</p>
 <code>struct</code> has a couple of extra members that optionally describe the source
 code line and character number of the values pointed at by <code>first</code> and
 <code>second</code>. We'll come back to these in the chapter on parsing.</p>
+<p>To instantiate a <code>Pair</code> function with <code>first</code> and <code>second</code> set to <code>Nil</code>, let's
+create a <code>new()</code> function:</p>
+<pre><code class="language-rust ignore">impl Pair {
+    pub fn new() -&gt; Pair {
+        Pair {
+            first: TaggedCellPtr::new_nil(),
+            second: TaggedCellPtr::new_nil(),
+            first_pos: Cell::new(None),
+            second_pos: Cell::new(None),
+        }
+    }
+}
+</code></pre>
+<p>That function, as it's not being allocated into the heap, doesn't require the
+lifetime guard. Let's look at a more interesting function: <code>cons()</code>, which
+assigns a value to <code>first</code> and <code>second</code> and puts the <code>Pair</code> on to the heap:</p>
+<pre><code class="language-rust ignore">pub fn cons&lt;'guard&gt;(
+    mem: &amp;'guard MutatorView,
+    head: TaggedScopedPtr&lt;'guard&gt;,
+    rest: TaggedScopedPtr&lt;'guard&gt;,
+) -&gt; Result&lt;TaggedScopedPtr&lt;'guard&gt;, RuntimeError&gt; {
+    let pair = Pair::new();
+    pair.first.set(head);
+    pair.second.set(rest);
+    mem.alloc_tagged(pair)
+}
+</code></pre>
+<p>Here we have the lifetime <code>'guard</code> associated with the <code>MutatorView</code> instance
+which grants access to the <code>alloc_tagged()</code> method.</p>
+<p>The other two args, <code>head</code> and <code>rest</code> are required to share the same <code>'guard</code>
+lifetime as the <code>MutatorView</code> instance, or rather, at least <code>'guard</code> must be
+a subtype of their lifetimes. Their values, of type <code>TaggedScopedPtr&lt;'guard&gt;</code>,
+can be written directly to the <code>first</code> and <code>second</code> members of <code>Pair</code> with
+<code>TaggedCellPtr::set()</code>.</p>
+<p>The only other piece to add, since <code>Pair</code> must be able to be passed into
+our allocator API, is the <code>AllocObject</code> impl for <code>Pair</code>:</p>
+<pre><code class="language-rust ignore">impl AllocObject&lt;TypeList&gt; for Pair {
+    const TYPE_ID: TypeList = TypeList::Pair;
+}
+</code></pre>
+<p>This impl will repeat for every type in <code>TypeList</code> so it'll be a great candidate
+for a macro.</p>
+<p>And that's it! We have a cons-cell style <code>Pair</code> type and some elementary
+methods for creating and allocating them.</p>
+<p>Now, back to <code>Symbol</code>, which seems like it should be even simpler, but as we'll
+see has some nuance to it.</p>
+<h2><a class="header" href="#symbols-and-pointers" id="symbols-and-pointers">Symbols and pointers</a></h2>
+<p>TODO</p>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
