@@ -157,8 +157,8 @@ pub struct Symbol {
     name_len: usize,
 }
 </code></pre>
-<p>How we handle these raw components will be covered in just a bit.
-First though, we'll delve into the <code>Pair</code> type.</p>
+<p>Why this is how <code>Symbol</code> is defined and how we handle these raw components will
+be covered in just a bit. First though, we'll delve into the <code>Pair</code> type.</p>
 <h2><a class="header" href="#pairs-of-pointers" id="pairs-of-pointers">Pairs of pointers</a></h2>
 <p>The definition of <code>Pair</code> is</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
@@ -171,7 +171,7 @@ pub struct Pair {
 }
 </code></pre>
 <p>The type of <code>first</code> and <code>second</code> is <code>TaggedCellPtr</code>, as seen in the previous
-chapter. This pointer type can point at any runtime supported type. By the
+chapter. This pointer type can point at any dynamic type. By the
 end of this chapter we'll be able to build a nested linked list of <code>Pair</code>s
 and <code>Symbol</code>s.</p>
 <p>Since this structure will be used for parsing and compiling, the <code>Pair</code>
@@ -206,26 +206,110 @@ assigns a value to <code>first</code> and <code>second</code> and puts the <code
 }
 </code></pre>
 <p>Here we have the lifetime <code>'guard</code> associated with the <code>MutatorView</code> instance
-which grants access to the <code>alloc_tagged()</code> method.</p>
+which grants access to the allocator <code>alloc_tagged()</code> method and the getter
+and setter on <code>TaggedScopedPtr</code>.</p>
 <p>The other two args, <code>head</code> and <code>rest</code> are required to share the same <code>'guard</code>
-lifetime as the <code>MutatorView</code> instance, or rather, at least <code>'guard</code> must be
+lifetime as the <code>MutatorView</code> instance, or rather, <code>'guard</code> must at least be
 a subtype of their lifetimes. Their values, of type <code>TaggedScopedPtr&lt;'guard&gt;</code>,
 can be written directly to the <code>first</code> and <code>second</code> members of <code>Pair</code> with
-<code>TaggedCellPtr::set()</code>.</p>
+the setter <code>TaggedCellPtr::set()</code>.</p>
+<p>We'll also add a couple <code>impl</code> methods for appending an object to a <code>Pair</code>
+in linked-list fashion:</p>
+<pre><code class="language-rust ignore">impl Pair {
+    pub fn append&lt;'guard&gt;(
+        &amp;self,
+        mem: &amp;'guard MutatorView,
+        value: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;TaggedScopedPtr&lt;'guard&gt;, RuntimeError&gt; {
+        let pair = Pair::new();
+        pair.first.set(value);
+
+        let pair = mem.alloc_tagged(pair)?;
+        self.second.set(pair);
+
+        Ok(pair)
+    }
+}
+</code></pre>
+<p>This method, given a value to append, creates a new <code>Pair</code> whose member <code>first</code>
+points at the value, then sets the <code>second</code> of the <code>&amp;self</code> <code>Pair</code> to that new
+<code>Pair</code> instance. This is in support of s-expression notation <code>(a b c)</code> which
+describes a linked-list of <code>Pair</code>s arranged:</p>
+<pre><code>Pair {
+    first: a,
+    second: Pair {
+        first: b,
+        second: Pair {
+            first: c
+            second: nil
+        }
+    }
+}
+</code></pre>
+<p>The second method is for directly setting the value of the <code>second</code> for
+s-expression dot-notation style: <code>(a . b)</code> is represented by <code>first</code> pointing
+at <code>a</code>, dotted with <code>b</code> which is pointed at by <code>second</code>.</p>
+<pre><code class="language-rust ignore">impl Pair {
+    pub fn dot&lt;'guard&gt;(&amp;self, value: TaggedScopedPtr&lt;'guard&gt;) {
+        self.second.set(value);
+    }
+}
+</code></pre>
 <p>The only other piece to add, since <code>Pair</code> must be able to be passed into
 our allocator API, is the <code>AllocObject</code> impl for <code>Pair</code>:</p>
 <pre><code class="language-rust ignore">impl AllocObject&lt;TypeList&gt; for Pair {
     const TYPE_ID: TypeList = TypeList::Pair;
 }
 </code></pre>
-<p>This impl will repeat for every type in <code>TypeList</code> so it'll be a great candidate
-for a macro.</p>
+<p>This impl pattern will repeat for every type in <code>TypeList</code> so it'll be a great
+candidate for a macro.</p>
 <p>And that's it! We have a cons-cell style <code>Pair</code> type and some elementary
 methods for creating and allocating them.</p>
 <p>Now, back to <code>Symbol</code>, which seems like it should be even simpler, but as we'll
 see has some nuance to it.</p>
 <h2><a class="header" href="#symbols-and-pointers" id="symbols-and-pointers">Symbols and pointers</a></h2>
-<p>TODO</p>
+<p>Let's recap the definition of <code>Symbol</code> and that it is the raw members of a
+<code>&amp;str</code>:</p>
+<pre><code class="language-rust ignore">#[derive(Copy, Clone)]
+pub struct Symbol {
+    name_ptr: *const u8,
+    name_len: usize,
+}
+</code></pre>
+<p>By this definition, a symbol has a name string, but does not own the string
+itself. What means this?</p>
+<p>Symbols are in fact pointers to interned strings. Since each symbol points
+to a unique string, we can identify a symbol by it's pointer value rather than
+needing to look up the string itself.</p>
+<p>However, symbols need to be looked up by their string name, and symbol pointers
+must dereference to find their name string. i.e. a bidirectional mapping of
+string to pointer and pointer to string.</p>
+<p>In our implementation, we use a <code>HashMap&lt;String, RawPtr&lt;Symbol&gt;&gt;</code> to map from
+name strings to symbol pointers, while the <code>Symbol</code> object itself points back
+to the name string.</p>
+<p>This is encapsulated in a <code>SymbolMap</code> struct:</p>
+<pre><code class="language-rust ignore">pub struct SymbolMap {
+    map: RefCell&lt;HashMap&lt;String, RawPtr&lt;Symbol&gt;&gt;&gt;,
+    arena: Arena,
+}
+</code></pre>
+<p>The second member <code>Arena</code> requires further explanation: since symbols are
+unique strings that can be identified and compared by their pointer values,
+these pointer values must remain static throughout the program lifetime.
+Thus, <code>Symbol</code> objects cannot be managed by a heap that might perform object
+relocation. And so we have a separate heap type for objects that are never
+moved or freed unil the program ends, the <code>Arena</code> type.</p>
+<p>The <code>Arena</code> type is simple. It, like <code>Heap</code>, wraps <code>StickyImmixHeap</code> but
+unlike <code>Heap</code>, it will never run garbage collection.</p>
+<pre><code class="language-rust ignore">pub struct Arena {
+    heap: StickyImmixHeap&lt;ArenaHeader&gt;,
+}
+</code></pre>
+<p>The <code>ArenaHeader</code> is a simple object header type to fulfill the allocator
+API requirements but whose methods will never be needed.</p>
+<p>Allocating a <code>Symbol</code> will use the <code>Arena::alloc()</code> method which calls through
+to the <code>StickyImmixHeap</code> instance.</p>
+<p>TODO lookup_symbol etc()</p>
 
                     </main>
 
