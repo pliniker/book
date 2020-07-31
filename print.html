@@ -2315,8 +2315,9 @@ and <code>Symbol</code>s.</p>
 <p>Since this structure will be used for parsing and compiling, the <code>Pair</code>
 <code>struct</code> has a couple of extra members that optionally describe the source
 code line and character number of the values pointed at by <code>first</code> and
-<code>second</code>. We'll come back to these in the chapter on parsing.</p>
-<p>To instantiate a <code>Pair</code> function with <code>first</code> and <code>second</code> set to <code>Nil</code>, let's
+<code>second</code>. These will be useful for reporting error messages. We'll come back
+to these in the chapter on parsing.</p>
+<p>To instantiate a <code>Pair</code> function with <code>first</code> and <code>second</code> set to nil, let's
 create a <code>new()</code> function:</p>
 <pre><code class="language-rust ignore">impl Pair {
     pub fn new() -&gt; Pair {
@@ -2371,22 +2372,26 @@ in linked-list fashion:</p>
 </code></pre>
 <p>This method, given a value to append, creates a new <code>Pair</code> whose member <code>first</code>
 points at the value, then sets the <code>second</code> of the <code>&amp;self</code> <code>Pair</code> to that new
-<code>Pair</code> instance. This is in support of s-expression notation <code>(a b c)</code> which
+<code>Pair</code> instance. This is in support of s-expression notation <code>(a b)</code> which
 describes a linked-list of <code>Pair</code>s arranged, in pseudo-Rust:</p>
 <pre><code>Pair {
-    first: &amp;a,
-    second: &amp;Pair {
-        first: &amp;b,
-        second: &amp;Pair {
-            first: &amp;c
-            second: nil
-        }
-    }
+    first: a,
+    second: Pair {
+        first: b,
+        second: nil,
+    },
 }
 </code></pre>
 <p>The second method is for directly setting the value of the <code>second</code> for
 s-expression dot-notation style: <code>(a . b)</code> is represented by <code>first</code> pointing
-at <code>a</code>, dotted with <code>b</code> which is pointed at by <code>second</code>.</p>
+at <code>a</code>, dotted with <code>b</code> which is pointed at by <code>second</code>. In our pseudo
+representation:</p>
+<pre><code>Pair {
+    first: a,
+    second: b,
+}
+</code></pre>
+<p>The implementation is simply:</p>
 <pre><code class="language-rust ignore">impl Pair {
     pub fn dot&lt;'guard&gt;(&amp;self, value: TaggedScopedPtr&lt;'guard&gt;) {
         self.second.set(value);
@@ -2419,9 +2424,9 @@ itself. What means this?</p>
 <p>Symbols are in fact pointers to interned strings. Since each symbol points
 to a unique string, we can identify a symbol by it's pointer value rather than
 needing to look up the string itself.</p>
-<p>However, symbols need to be looked up by their string name, and symbol pointers
-must dereference to find their name string. i.e. a bidirectional mapping of
-string to pointer and pointer to string.</p>
+<p>However, symbols do need to be discovered by their string name, and symbol
+pointers must dereference to return their string form. i.e. a we need a
+bidirectional mapping of string to pointer and pointer to string.</p>
 <p>In our implementation, we use a <code>HashMap&lt;String, RawPtr&lt;Symbol&gt;&gt;</code> to map from
 name strings to symbol pointers, while the <code>Symbol</code> object itself points back
 to the name string.</p>
@@ -2431,11 +2436,13 @@ to the name string.</p>
     arena: Arena,
 }
 </code></pre>
-<p>The second member <code>Arena</code> requires further explanation: since symbols are
+<p>where we use <code>RefCell</code> to wrap operations in interior mutability, just like
+all other allocator functionality.</p>
+<p>The second struct member <code>Arena</code> requires further explanation: since symbols are
 unique strings that can be identified and compared by their pointer values,
 these pointer values must remain static throughout the program lifetime.
 Thus, <code>Symbol</code> objects cannot be managed by a heap that might perform object
-relocation. We have a separate heap type for objects that are never
+relocation. We need a separate heap type for objects that are never
 moved or freed unil the program ends, the <code>Arena</code> type.</p>
 <p>The <code>Arena</code> type is simple. It, like <code>Heap</code>, wraps <code>StickyImmixHeap</code> but
 unlike <code>Heap</code>, it will never run garbage collection.</p>
@@ -2448,7 +2455,7 @@ API requirements but whose methods will never be needed.</p>
 <p>Allocating a <code>Symbol</code> will use the <code>Arena::alloc()</code> method which calls through
 to the <code>StickyImmixHeap</code> instance.</p>
 <p>We'll add a method for getting a <code>Symbol</code> from it's name string to the
-<code>SymbolMap</code>:</p>
+<code>SymbolMap</code> at the allocator API level:</p>
 <pre><code class="language-rust ignore">impl SymbolMap {
     pub fn lookup(&amp;self, name: &amp;str) -&gt; RawPtr&lt;Symbol&gt; {
         {
@@ -2464,7 +2471,7 @@ to the <code>StickyImmixHeap</code> instance.</p>
     }
 }
 </code></pre>
-<p>We'll add wrappers to the <code>Heap</code> and <code>MutatorView</code> impls to scope-restrict
+<p>Then we'll add wrappers to the <code>Heap</code> and <code>MutatorView</code> impls to scope-restrict
 access:</p>
 <pre><code class="language-rust ignore">impl Heap {
     fn lookup_sym(&amp;self, name: &amp;str) -&gt; TaggedPtr {
