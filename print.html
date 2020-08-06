@@ -161,7 +161,9 @@ to using Rust.</p>
 <li>A compiler and VM that interact with the above two layers</li>
 </ul>
 <p>The goal of this book is not to cover a full featured language but rather to
-provide a solid foundation on which you can build further features.</p>
+provide a solid foundation on which you can build further features. Along
+the way we'll implement as much as possible in terms of our own memory
+management abstractions rather than using Rust std collections.</p>
 <h3><a class="header" href="#level-of-difficulty" id="level-of-difficulty">Level of difficulty</a></h3>
 <p>Bob Nystrom's <a href="http://craftinginterpreters.com/">Crafting Interpreters</a>
 is recommended <em>introductory</em> reading to this book for beginners to the topic.
@@ -2614,6 +2616,59 @@ instances in our Sticky Immix heap and so requires the scope-restricted
 something altogether more informative with regards to memory management
 and it'll be necessary by the time we're ready to compile: arrays!</p>
 <h1><a class="header" href="#arrays" id="arrays">Arrays</a></h1>
+<p>Before we get to the basics of compilation, we need another data structure:
+the humble array. The primary use for arrays will be to store the bytecode
+sequences that the compiler generates.</p>
+<p>Rust already has <code>Vec</code> but as we're implementing everything in terms of our
+memory management abstraction, we cannot directly use <code>Vec</code>. Rust does not
+(yet) expose the ability to specify a custom allocator type as part of <code>Vec</code>,
+nor are we interested in replacing the global allocator.</p>
+<p>Our only option is to write our own version of <code>Vec</code>! Fortunately we can
+learn a lot from <code>Vec</code> and it's underlying implementation. Jump over to the
+<a href="https://doc.rust-lang.org/nomicon/vec.html">Nomicon</a> for the Rust-oriented approach to arrays.</p>
+<p>The first thing we'll learn is to split the implementation into a <code>RawArray&lt;T&gt;</code>
+type and an <code>Array&lt;T&gt;</code> type. <code>RawArray&lt;T&gt;</code> will provide an unsafe abstraction
+while <code>Array&lt;T&gt;</code> will make a safe layer over it.</p>
+<h2><a class="header" href="#rawarray" id="rawarray">RawArray</a></h2>
+<p>If you've just come back from <em>Implementing Vec</em> in the Nomicon, you'll
+recognize what we're doing below with <code>RawArray&lt;T&gt;</code>:</p>
+<pre><code class="language-rust ignore">pub struct RawArray&lt;T: Sized&gt; {
+    /// Count of T-sized objects that can fit in the array
+    capacity: ArraySize,
+    ptr: Option&lt;NonNull&lt;T&gt;&gt;,
+}
+</code></pre>
+<p>Instead of <code>Unique&lt;T&gt;</code> for the pointer, we're using <code>Option&lt;NonNull&lt;T&gt;&gt;</code>.
+One simple reason is that <code>Unique&lt;T&gt;</code> is likely to be permanently unstable and
+only available internally to <code>std</code> collections. The other is that we can
+avoid allocating the backing store if no capacity is requested yet, setting
+the value of <code>ptr</code> to <code>None</code>.</p>
+<p>For when we <em>do</em> know the desired capacity, there is
+<code>RawArray&lt;T&gt;::with_capacity()</code>. This method, because it allocates, requires
+access to the <code>MutatorView</code> instance. If you'll recall from the chapter on
+the allocation API, the API provides an array allocation method with
+signature:</p>
+<pre><code class="language-rust ignore">AllocRaw::alloc_array(&amp;self, size_bytes: ArraySize) -&gt; Result&lt;RawPtr&lt;u8&gt;, AllocError&gt;;
+</code></pre>
+<p>This method is wrapped on the interpreter side by <code>Heap</code> and <code>MutatorView</code> and
+in both cases the return value remains, simply, <code>RawPtr&lt;u8&gt;</code> in the success
+case. It's up to <code>RawArray&lt;T&gt;</code> to receive the <code>RawPtr&lt;u8&gt;</code> value and maintain
+it safely. Here's <code>with_capcity()</code>, now:</p>
+<pre><code class="language-rust ignore">    pub fn with_capacity&lt;'scope&gt;(
+        mem: &amp;'scope MutatorView,
+        capacity: u32,
+    ) -&gt; Result&lt;RawArray&lt;T&gt;, RuntimeError&gt; {
+        // convert to bytes, checking for possible overflow of ArraySize limit
+        let capacity_bytes = capacity
+            .checked_mul(size_of::&lt;T&gt;() as ArraySize)
+            .ok_or(RuntimeError::new(ErrorKind::BadAllocationRequest))?;
+
+        Ok(RawArray {
+            capacity: capacity,
+            ptr: NonNull::new(mem.alloc_array(capacity_bytes)?.as_ptr() as *mut T),
+        })
+    }
+</code></pre>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
