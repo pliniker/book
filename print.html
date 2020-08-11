@@ -2617,15 +2617,15 @@ something altogether more informative with regards to memory management
 and it'll be necessary by the time we're ready to compile: arrays!</p>
 <h1><a class="header" href="#arrays" id="arrays">Arrays</a></h1>
 <p>Before we get to the basics of compilation, we need another data structure:
-the humble array. The primary use for arrays will be to store the bytecode
+the humble array. The first use for arrays will be to store the bytecode
 sequences that the compiler generates.</p>
-<p>Rust already has <code>Vec</code> but as we're implementing everything in terms of our
+<p>Rust already provides <code>Vec</code> but as we're implementing everything in terms of our
 memory management abstraction, we cannot directly use <code>Vec</code>. Rust does not
 (yet) expose the ability to specify a custom allocator type as part of <code>Vec</code>,
 nor are we interested in replacing the global allocator.</p>
 <p>Our only option is to write our own version of <code>Vec</code>! Fortunately we can
-learn a lot from <code>Vec</code> and it's underlying implementation. Jump over to the
-<a href="https://doc.rust-lang.org/nomicon/vec.html">Nomicon</a> for the Rust-oriented approach to arrays.</p>
+learn a lot from <code>Vec</code> itself and it's underlying implementation. Jump over to
+the <a href="https://doc.rust-lang.org/nomicon/vec.html">Rustonomicon</a> for a primer on the internals of <code>Vec</code>.</p>
 <p>The first thing we'll learn is to split the implementation into a <code>RawArray&lt;T&gt;</code>
 type and an <code>Array&lt;T&gt;</code> type. <code>RawArray&lt;T&gt;</code> will provide an unsafe abstraction
 while <code>Array&lt;T&gt;</code> will make a safe layer over it.</p>
@@ -2668,6 +2668,38 @@ it safely. Here's <code>with_capcity()</code>, now:</p>
             ptr: NonNull::new(mem.alloc_array(capacity_bytes)?.as_ptr() as *mut T),
         })
     }
+</code></pre>
+<h3><a class="header" href="#resizing" id="resizing">Resizing</a></h3>
+<p>If a <code>RawArray&lt;T&gt;</code>'s content will exceed it's capacity, there is
+<code>RawArray&lt;T&gt;::resize()</code>. It allocates a new backing array using the
+<code>MutatorView</code> method <code>alloc_array()</code> and copies the content of the old
+over to the new, finally swapping in the new backing array for the old.</p>
+<p>The code for this is straightforward but a little longer, go check it out
+in <code>interpreter/src/rawarray.rs</code>.</p>
+<h3><a class="header" href="#accessing" id="accessing">Accessing</a></h3>
+<p>Since <code>RawArray&lt;T&gt;</code> will be wrapped by <code>Array&lt;T&gt;</code>, we need a couple more
+methods to access the raw memory:</p>
+<pre><code class="language-rust ignore">impl&lt;T: Sized&gt; RawArray&lt;T&gt; {
+    pub fn capacity(&amp;self) -&gt; ArraySize {
+        self.capacity
+    }
+
+    pub fn as_ptr(&amp;self) -&gt; Option&lt;*const T&gt; {
+        match self.ptr {
+            Some(ptr) =&gt; Some(ptr.as_ptr()),
+            None =&gt; None,
+        }
+    }
+}
+</code></pre>
+<p>And that's it! Now for the safe wrapper.</p>
+<h2><a class="header" href="#array" id="array">Array</a></h2>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct Array&lt;T: Sized + Clone&gt; {
+    length: Cell&lt;ArraySize&gt;,
+    data: Cell&lt;RawArray&lt;T&gt;&gt;,
+    borrow: Cell&lt;BorrowFlag&gt;,
+}
 </code></pre>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
