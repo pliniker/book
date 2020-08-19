@@ -226,6 +226,7 @@ methods to access the raw memory:</p>
 </code></pre>
 <p>And that's it! Now for the safe wrapper.</p>
 <h2><a class="header" href="#array" id="array">Array</a></h2>
+<p>The definition of the struct wrapping <code>RawArray&lt;T&gt;</code> is as follows:</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct Array&lt;T: Sized + Clone&gt; {
     length: Cell&lt;ArraySize&gt;,
@@ -233,6 +234,132 @@ pub struct Array&lt;T: Sized + Clone&gt; {
     borrow: Cell&lt;BorrowFlag&gt;,
 }
 </code></pre>
+<p>Here we have three members:</p>
+<ul>
+<li><code>length</code> - the length of the array</li>
+<li><code>data</code> - the <code>RawArray&lt;T&gt;</code> being wrapped</li>
+<li><code>borrow</code> - a flag serving as a runtime borrow check, allowing <code>RefCell</code>
+runtime semantics, since we're in a world of interior mutability patterns</li>
+</ul>
+<p>We have a method to create a new array - <code>Array::alloc()</code></p>
+<pre><code class="language-rust ignore">impl&lt;T: Sized + Clone&gt; Array&lt;T&gt; {
+    pub fn alloc&lt;'guard&gt;(
+        mem: &amp;'guard MutatorView,
+    ) -&gt; Result&lt;ScopedPtr&lt;'guard, Array&lt;T&gt;&gt;, RuntimeError&gt;
+    where
+        Array&lt;T&gt;: AllocObject&lt;TypeList&gt;,
+    {
+        mem.alloc(Array::new())
+    }
+}
+</code></pre>
+<p>In fact we'll extend this pattern of a method named &quot;alloc&quot; to any data
+structure for convenience sake.</p>
+<p>There are many more methods for <code>Array&lt;T&gt;</code> and it would be exhausting to be
+exhaustive. Let's go over the core methods used to read and write elements
+and then an example use case.</p>
+<h3><a class="header" href="#reading-and-writing" id="reading-and-writing">Reading and writing</a></h3>
+<p>First of all, we need a function that takes an array index and returns a
+pointer to a memory location, if the index is within bounds:</p>
+<pre><code class="language-rust ignore">impl&lt;T: Sized + Clone&gt; Array&lt;T&gt; {
+    fn get_offset(&amp;self, index: ArraySize) -&gt; Result&lt;*mut T, RuntimeError&gt; {
+        if index &gt;= self.length.get() {
+            Err(RuntimeError::new(ErrorKind::BoundsError))
+        } else {
+            let ptr = self
+                .data
+                .get()
+                .as_ptr()
+                .ok_or(RuntimeError::new(ErrorKind::BoundsError))?;
+
+            let dest_ptr = unsafe { ptr.offset(index as isize) as *mut T };
+
+            Ok(dest_ptr)
+        }
+    }
+}
+</code></pre>
+<p>There are two bounds checks here - firstly, the index should be within the
+(likely non-zero) length values; secondly, the <code>RawArray&lt;T&gt;</code> instance
+should have a backing array allocated. If either of these checks fail, the
+result is an error. If these checks pass, we can be confident that there
+is array backing memory and that we can return a valid pointer to somewhere
+inside that memory block.</p>
+<p>For reading a value in an array, we need two methods:</p>
+<ol>
+<li>one that handles move/copy semantics and returns a value</li>
+<li>one that handles reference semantics and returns a reference to the original
+value in it's location in the backing memory</li>
+</ol>
+<p>First, then:</p>
+<pre><code class="language-rust ignore">impl&lt;T: Sized + Clone&gt; Array&lt;T&gt; {
+    fn read&lt;'guard&gt;(
+        &amp;self,
+        _guard: &amp;'guard dyn MutatorScope,
+        index: ArraySize,
+    ) -&gt; Result&lt;T, RuntimeError&gt; {
+        unsafe {
+            let dest = self.get_offset(index)?;
+            Ok(read(dest))
+        }
+    }
+}
+</code></pre>
+<p>and secondly:</p>
+<pre><code class="language-rust ignore">impl&lt;T: Sized + Clone&gt; Array&lt;T&gt; {
+    pub fn read_ref&lt;'guard&gt;(
+        &amp;self,
+        _guard: &amp;'guard dyn MutatorScope,
+        index: ArraySize,
+    ) -&gt; Result&lt;&amp;T, RuntimeError&gt; {
+        unsafe {
+            let dest = self.get_offset(index)?;
+            Ok(&amp;*dest as &amp;T)
+        }
+    }
+}
+</code></pre>
+<p>Writing, or copying, an object to an array is implemented as simply as follows:</p>
+<pre><code class="language-rust ignore">impl&lt;T: Sized + Clone&gt; Array&lt;T&gt; {
+    pub fn read_ref&lt;'guard&gt;(
+        &amp;self,
+        _guard: &amp;'guard dyn MutatorScope,
+        index: ArraySize,
+    ) -&gt; Result&lt;&amp;T, RuntimeError&gt; {
+        unsafe {
+            let dest = self.get_offset(index)?;
+            Ok(&amp;*dest as &amp;T)
+        }
+    }
+}
+</code></pre>
+<p>These simple functions should only be used internally by <code>Array&lt;T&gt;</code> impl
+methods. We have numerous methods that wrap the above in more appropriate
+semantics for values of <code>T</code> in <code>Array&lt;T&gt;</code>.</p>
+<h3><a class="header" href="#the-array-interfaces" id="the-array-interfaces">The Array interfaces</a></h3>
+<p>To define the interfaces to the Array, and other collection types, we define a
+number of traits. For example, a collection that behaves as a stack implements
+<code>StackContainer</code>; a numerically indexable type implements <code>IndexedContainer</code>,
+and so on. As we'll wee, there is some nuance, though, when it comes to a
+difference between collections of non-pointer types and collections of pointer
+types.</p>
+<p>For our example, we will describe the stack interfaces of <code>Array&lt;T&gt;</code>.</p>
+<p>First, the general case trait, with methods for accessing values stored in the
+array (non-pointer types):</p>
+<pre><code class="language-rust ignore">pub trait StackContainer&lt;T: Sized + Clone&gt;: Container&lt;T&gt; {
+    /// Push can trigger an underlying array resize, hence it requires the ability to allocate
+    fn push&lt;'guard&gt;(&amp;self, mem: &amp;'guard MutatorView, item: T) -&gt; Result&lt;(), RuntimeError&gt;;
+
+    /// Pop returns a bounds error if the container is empty, otherwise moves the last item of the
+    /// array out to the caller.
+    fn pop&lt;'guard&gt;(&amp;self, _guard: &amp;'guard dyn MutatorScope) -&gt; Result&lt;T, RuntimeError&gt;;
+
+    /// Return the value at the top of the stack without removing it
+    fn top&lt;'guard&gt;(&amp;self, _guard: &amp;'guard dyn MutatorScope) -&gt; Result&lt;T, RuntimeError&gt;;
+}
+</code></pre>
+<p>These are unremarkable functions, by now we're familiar with the references to
+<code>MutatorScope</code> and <code>MutatorView</code> in method parameter lists.</p>
 
                     </main>
 
