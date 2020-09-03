@@ -201,8 +201,59 @@ safe encoding; no bit operations needed</li>
 </li>
 </ol>
 <p>The ability to leverage the compiler to prevent opcode encoding errors is
-attractive and we don't have any need for complex encodings. We'll use an enum
+attractive and we won't have any need for complex encodings. We'll use an enum
 to represent all possible opcodes and their operands.</p>
+<p>Since a Rust enum can contain named values within each variant, this is what
+we use to most tightly define our opcodes.</p>
+<h3><a class="header" href="#opcode-size" id="opcode-size">Opcode size</a></h3>
+<p>Since we're using <code>enum</code> instead of a directly size-controlled type such as u32
+for our opcodes, we have to be more careful about making sure our opcode type
+doesn't take up more space than is necessary.  32 bits is ideal for reasons
+stated earlier (8 bits for the operator and 8 bits for three operands each.)</p>
+<p>Let's do some experiments.</p>
+<p>First, we need to define a register as an 8 bit value. We'll also define an
+inline literal integer as 16 bits.</p>
+<pre><code class="language-rust ignore">type Register = u8;
+type LiteralInt = i16;
+</code></pre>
+<p>Then we'll create an opcode enum with a few variants that might be typical:</p>
+<pre><code class="language-rust ignore">enum Opcode {
+    Add {
+        dest: Register,
+        a: Register,
+        b: Register
+    },
+    LoadLiteral {
+        dest: Register,
+        value: LiteralInt
+    }
+}
+</code></pre>
+<p>It should be obvious that with an enum like this we can safely pass compiled
+bytecode from the compiler to the VM. It should also be clear that this, by
+allowing use of <code>match</code> statements, will be very ergonomic to work with.</p>
+<p>Theoretically, if our variants never have more than 3 <code>Register</code> values, or
+one <code>Register</code> and one <code>LiteralInt</code> sized value, the compiler should be able
+to pack <code>Opcode</code> into 32 bits.</p>
+<p>Our test: we hope the output of the following code to be <code>4</code> - 4 bytes or 32
+bits.</p>
+<pre><code class="language-rust ignore">use std::mem::size_of;
+
+fn main() {
+    println!(&quot;Size of Opcode is {}&quot;, size_of::&lt;Opcode&gt;());
+}
+</code></pre>
+<p>we get <code>Size of Opcode is 4</code>!</p>
+<p>If we add more than 256 variants or values that sum up to greater than 24 bits,
+this will not hold. To keep an eye on this situation, we'll put this check
+into a unit test:</p>
+<pre><code class="language-rust ignore">    #[test]
+    fn test_opcode_is_32_bits() {
+        // An Opcode should be 32 bits; anything bigger and we've mis-defined some
+        // variant
+        assert!(size_of::&lt;Opcode&gt;() == 4);
+    }
+</code></pre>
 <hr />
 <div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
 <p>Roberto Ierusalimschy et al, <a href="https://www.lua.org/doc/jucs05.pdf">The Implementation of Lua 5.0</a></p>
