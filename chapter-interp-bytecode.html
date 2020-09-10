@@ -214,10 +214,11 @@ stated earlier (8 bits for the operator and 8 bits for three operands each.)</p>
 <p>First, we need to define a register as an 8 bit value. We'll also define an
 inline literal integer as 16 bits.</p>
 <pre><code class="language-rust ignore">type Register = u8;
-type LiteralInt = i16;
+type LiteralInteger = i16;
 </code></pre>
 <p>Then we'll create an opcode enum with a few variants that might be typical:</p>
-<pre><code class="language-rust ignore">enum Opcode {
+<pre><code class="language-rust ignore">#[derive(Copy, Clone)]
+enum Opcode {
     Add {
         dest: Register,
         a: Register,
@@ -225,16 +226,16 @@ type LiteralInt = i16;
     },
     LoadLiteral {
         dest: Register,
-        value: LiteralInt
+        value: LiteralInteger
     }
 }
 </code></pre>
 <p>It should be obvious that with an enum like this we can safely pass compiled
 bytecode from the compiler to the VM. It should also be clear that this, by
 allowing use of <code>match</code> statements, will be very ergonomic to work with.</p>
-<p>Theoretically, if our variants never have more than 3 <code>Register</code> values, or
-one <code>Register</code> and one <code>LiteralInt</code> sized value, the compiler should be able
-to pack <code>Opcode</code> into 32 bits.</p>
+<p>Theoretically, if we never have more than 256 variants, our variants never have
+more than 3 <code>Register</code> values (or one <code>Register</code> and one <code>LiteralInteger</code> sized
+value), the compiler should be able to pack <code>Opcode</code> into 32 bits.</p>
 <p>Our test: we hope the output of the following code to be <code>4</code> - 4 bytes or 32
 bits.</p>
 <pre><code class="language-rust ignore">use std::mem::size_of;
@@ -244,15 +245,105 @@ fn main() {
 }
 </code></pre>
 <p>we get <code>Size of Opcode is 4</code>!</p>
-<p>If we add more than 256 variants or values that sum up to greater than 24 bits,
-this will not hold. To keep an eye on this situation, we'll put this check
-into a unit test:</p>
+<p>To keep an eye on this situation, we'll put this check into a unit test:</p>
 <pre><code class="language-rust ignore">    #[test]
     fn test_opcode_is_32_bits() {
         // An Opcode should be 32 bits; anything bigger and we've mis-defined some
         // variant
         assert!(size_of::&lt;Opcode&gt;() == 4);
     }
+</code></pre>
+<p>Now, let's put these into an array.</p>
+<h2><a class="header" href="#an-array-of-opcode" id="an-array-of-opcode">An array of Opcode</a></h2>
+<p>We can define this array easily, given that <code>Array&lt;T&gt;</code> is a generic type:</p>
+<pre><code class="language-rust ignore">pub type ArrayOpcode = Array&lt;Opcode&gt;;
+</code></pre>
+<p>Is this enough to define bytecode? Not quite. We've accommodated 16 bit
+literal signed integers, but all kinds of other types can be literals.
+We need some way of referencing any literal type in bytecode. For that
+we add a <code>Literals</code> type, which is just:</p>
+<pre><code class="language-rust ignore">pub type Literals = List;
+</code></pre>
+<p>Any opcode that loads a literal (other than a 16 bit signed integer) will
+need to reference an object in the <code>Literals</code> list. This is easy enough:
+just as there's a <code>LiteralInteger</code>, we have <code>LiteralId</code> defined as</p>
+<pre><code class="language-rust ignore">pub type LiteralId = u16;
+</code></pre>
+<p>This id is an index into the <code>Literals</code> list.  This isn't the most efficient
+scheme or encoding, but given a preference for fixed 32 bit opcodes, it will
+also keep things simple.</p>
+<p>The <code>ByteCode</code> type, finally, is a composition of <code>ArrayOpcode</code> and <code>Literals</code>:</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct ByteCode {
+    code: ArrayOpcode,
+    literals: Literals,
+}
+</code></pre>
+<h2><a class="header" href="#bytecode-compiler-support" id="bytecode-compiler-support">Bytecode compiler support</a></h2>
+<p>There are a few methods implemented for <code>ByteCode</code>:</p>
+<ol>
+<li><code>fn push&lt;'guard&gt;(&amp;self, mem: &amp;'MutatorView, op: Opcode) -&gt; Result&lt;(), RuntimeError&gt;</code>
+This function pushes a new opcode into the <code>ArrayOpcode</code> instance.</li>
+<li>
+<pre><code class="language-rust ignore">fn update_jump_offset&lt;'guard&gt;(
+    &amp;self,
+    mem: &amp;'guard MutatorView,
+    instruction: ArraySize,
+    offset: JumpOffset,
+) -&gt; Result&lt;(), RuntimeError&gt;
+</code></pre>
+This function, given an instruction index into the <code>ArrayOpcode</code> instance,
+and given that the instruction at that index is a type of jump instruction,
+sets the relative jump offset of the instruction to the given offset.
+This is necessary because forward jumps cannot be calculated until all the
+in-between instructions have been compiled first.</li>
+<li>
+<pre><code class="language-rust ignore">fn push_lit&lt;'guard&gt;(
+    &amp;self,
+    mem: &amp;'guard MutatorView,
+    literal: TaggedScopedPtr
+) -&gt; Result&lt;LiteralId, RuntimeError&gt;
+</code></pre>
+This function pushes a literal on to the <code>Literals</code> list and returns the
+index - the id - of the item.</li>
+<li>
+<pre><code class="language-rust ignore">fn push_loadlit&lt;'guard&gt;(
+    &amp;self,
+    mem: &amp;'guard MutatorView,
+    dest: Register,
+    literal_id: LiteralId,
+) -&gt; Result&lt;(), RuntimeError&gt;
+</code></pre>
+After pushing a literal into the <code>Literals</code> list, the corresponding load
+instruction should be pushed into the <code>ArrayOpcode</code> list.</li>
+</ol>
+<p><code>ByteCode</code> and it's functions combined with the <code>Opcode</code> enum are enough to
+build a compiler for.</p>
+<h2><a class="header" href="#bytecode-execution-support" id="bytecode-execution-support">Bytecode execution support</a></h2>
+<p>The previous section described a handful of functions for our compiler to use
+to build a <code>ByteCode</code> structure.</p>
+<p>We'll need a different set of functions for our virtual machine to access
+<code>ByteCode</code> from an execution standpoint.</p>
+<p>Execution of bytecode involves a contiguous sequence of instructions and an
+instruction pointer. We're going to compile a separate <code>ByteCode</code> instance
+for each function that gets compiled, so our execution model will have to
+be able to jump between <code>ByteCode</code> instances. We'll need a new struct to
+represent that:</p>
+<pre><code class="language-rust ignore">pub struct InstructionStream {
+    instructions: CellPtr&lt;ByteCode&gt;,
+    ip: Cell&lt;ArraySize&gt;,
+}
+</code></pre>
+<p>In this definition, the pointer <code>instructions</code> can be updated to point at any
+<code>ByteCode</code> instance. This allows us to switch between functions by managing
+different <code>ByteCode</code> pointers as part of a stack of call frames. In support
+of this we have:</p>
+<pre><code class="language-rust ignore">impl InstructionStream {
+    pub fn switch_frame(&amp;self, code: ScopedPtr&lt;'_, ByteCode&gt;, ip: ArraySize) {
+        self.instructions.set(code);
+        self.ip.set(ip);
+    }
+}
 </code></pre>
 <hr />
 <div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
