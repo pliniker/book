@@ -3166,6 +3166,47 @@ a dictionary or hash map. This will also build on the foundational
 <p>Roberto Ierusalimschy et al, <a href="https://www.lua.org/doc/jucs05.pdf">The Implementation of Lua 5.0</a></p>
 </div>
 <h1><a class="header" href="#dicts" id="dicts">Dicts</a></h1>
+<p>The implementation of dicts is going to combine a reuse of the
+<a href="./chapter-interp-arrays.html">RawArray</a>
+type and closely follow the <a href="http://craftinginterpreters.com/hash-tables.html">Crafting Interpreters</a> design:</p>
+<ul>
+<li>open addressing</li>
+<li>linear probing</li>
+<li>FNV hashing</li>
+</ul>
+<p>Go read the corresponding chapter in Crafting Interpreters and then come
+back here. We won't duplicate Bob's excellent explanation of the above
+terms and we'll assume you are familiar with his chapter when reading
+ours.</p>
+<h2><a class="header" href="#code-design" id="code-design">Code design</a></h2>
+<p>A <code>Dict</code> in our interpreter will allow any hashable value as a key and any
+type as a value. We'll store pointers to the key and the value together in
+a struct <code>DictItem</code>.</p>
+<p>Here, we'll also introduce the single diversion from
+Crafting Interpreters' implementation in that we'll cache the hash value and
+use it as part of a tombstone indicator. This adds an extra 64 bits storage
+requirement per item but we will also take the stance that if two keys have
+the same hash value then the keys are equal. This simplifies our implementation
+as we won't need to implement object equality comparisons just yet.</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct DictItem {
+    key: TaggedCellPtr,
+    value: TaggedCellPtr,
+    hash: u64,
+}
+</code></pre>
+<p>The <code>Dict</code> itself mirrors Crafting Interpreters' implementation of a count of
+used entries and an array of entries. Since tombstones are counted as used
+entries, we'll add a separate <code>length</code> that excludes tombstones.</p>
+<pre><code class="language-rust ignore">pub struct Dict {
+    /// Number of items stored
+    length: Cell&lt;ArraySize&gt;,
+    /// Total count of items plus tombstones
+    used_entries: Cell&lt;ArraySize&gt;,
+    /// Backing array for key/value entries
+    data: Cell&lt;RawArray&lt;DictItem&gt;&gt;,
+}
+</code></pre>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
