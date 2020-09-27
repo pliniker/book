@@ -189,6 +189,50 @@ entries, we'll add a separate <code>length</code> that excludes tombstones.</p>
     data: Cell&lt;RawArray&lt;DictItem&gt;&gt;,
 }
 </code></pre>
+<h2><a class="header" href="#hashing" id="hashing">Hashing</a></h2>
+<p>Since our only language supported types for now are <code>Symbol</code>s, <code>Pair</code>s and
+inline integers in our tagged pointer, we'll take the step of least complexity
+and implement hashing for <code>Symbol</code>s and tagged integers only to begin with.
+This is all we <em>need</em> support for to implement the compiler and virtual machine.</p>
+<p>The Rust standard library defines trait <code>std::hash::Hash</code> that must be
+implemented by types that want to be hashed. This trait requires the type to
+implement method <code>fn hash&lt;H&gt;(&amp;self, state: &amp;mut H) where H: Hasher</code>.</p>
+<p>This signature requires a reference to the type <code>&amp;self</code> to access it's data.
+In our world, this is insufficient: we also require a <code>&amp;MutatorScope</code>
+lifetime to access an object. We will have to wrap <code>std::hash::Hash</code> in our
+own trait that extends, essentially the same signature, with this scope
+guard parameter. This trait is named <code>Hashable</code>:</p>
+<pre><code class="language-rust ignore">/// Similar to Hash but for use in a mutator lifetime-limited scope
+pub trait Hashable {
+    fn hash&lt;'guard, H: Hasher&gt;(&amp;self, _guard: &amp;'guard dyn MutatorScope, hasher: &amp;mut H);
+}
+</code></pre>
+<p>We can implement this trait for <code>Symbol</code> - it's a straightforward wrap of
+calling <code>Hash::hash()</code>:</p>
+<pre><code class="language-rust ignore">impl Hashable for Symbol {
+    fn hash&lt;'guard, H: Hasher&gt;(&amp;self, guard: &amp;'guard dyn MutatorScope, h: &amp;mut H) {
+        self.as_str(guard).hash(h)
+    }
+}
+</code></pre>
+<p>Then finally, because this is all for a dynamically typed interpreter, we'll
+write a function that can take any type - a <code>TaggedScopedPtr</code> - and attempt
+to return a hash value from it:</p>
+<pre><code class="language-rust ignore">fn hash_key&lt;'guard&gt;(
+    guard: &amp;'guard dyn MutatorScope,
+    key: TaggedScopedPtr&lt;'guard&gt;,
+) -&gt; Result&lt;u64, RuntimeError&gt; {
+    match *key {
+        Value::Symbol(s) =&gt; {
+            let mut hasher = FnvHasher::default();
+            s.hash(guard, &amp;mut hasher);
+            Ok(hasher.finish())
+        }
+        Value::Number(n) =&gt; Ok(n as u64),
+        _ =&gt; Err(RuntimeError::new(ErrorKind::UnhashableError)),
+    }
+}
+</code></pre>
 
                     </main>
 
