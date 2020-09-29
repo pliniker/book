@@ -3184,8 +3184,8 @@ type as a value. We'll store pointers to the key and the value together in
 a struct <code>DictItem</code>.</p>
 <p>Here, we'll also introduce the single diversion from
 Crafting Interpreters' implementation in that we'll cache the hash value and
-use it as part of a tombstone indicator. This adds an extra 64 bits storage
-requirement per item but we will also take the stance that if two keys have
+use it as part of a tombstone indicator. This adds an extra word
+per entry but we will also take the stance that if two keys have
 the same hash value then the keys are equal. This simplifies our implementation
 as we won't need to implement object equality comparisons just yet.</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
@@ -3197,7 +3197,8 @@ pub struct DictItem {
 </code></pre>
 <p>The <code>Dict</code> itself mirrors Crafting Interpreters' implementation of a count of
 used entries and an array of entries. Since tombstones are counted as used
-entries, we'll add a separate <code>length</code> that excludes tombstones.</p>
+entries, we'll add a separate <code>length</code> that excludes tombstones so we can
+accurately report the number of items in a dict.</p>
 <pre><code class="language-rust ignore">pub struct Dict {
     /// Number of items stored
     length: Cell&lt;ArraySize&gt;,
@@ -3208,10 +3209,11 @@ entries, we'll add a separate <code>length</code> that excludes tombstones.</p>
 }
 </code></pre>
 <h2><a class="header" href="#hashing" id="hashing">Hashing</a></h2>
-<p>Since our only language supported types for now are <code>Symbol</code>s, <code>Pair</code>s and
+<p>Since our only language supported types for now are <code>Symbol</code>, <code>Pair</code> and
 inline integers in our tagged pointer, we'll take the step of least complexity
-and implement hashing for <code>Symbol</code>s and tagged integers only to begin with.
-This is all we <em>need</em> support for to implement the compiler and virtual machine.</p>
+and implement hashing only for <code>Symbol</code> and tagged integers to begin with.
+In any case, this is all we <em>need</em> support for to implement the compiler and
+virtual machine.</p>
 <p>The Rust standard library defines trait <code>std::hash::Hash</code> that must be
 implemented by types that want to be hashed. This trait requires the type to
 implement method <code>fn hash&lt;H&gt;(&amp;self, state: &amp;mut H) where H: Hasher</code>.</p>
