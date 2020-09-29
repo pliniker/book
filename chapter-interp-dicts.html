@@ -191,11 +191,8 @@ accurately report the number of items in a dict.</p>
 }
 </code></pre>
 <h2><a class="header" href="#hashing" id="hashing">Hashing</a></h2>
-<p>Since our only language supported types for now are <code>Symbol</code>, <code>Pair</code> and
-inline integers in our tagged pointer, we'll take the step of least complexity
-and implement hashing only for <code>Symbol</code> and tagged integers to begin with.
-In any case, this is all we <em>need</em> support for to implement the compiler and
-virtual machine.</p>
+<p>To implement our compiler we will need to be able to hash the <code>Symbol</code> type and
+integers (inline in tagged pointers.)</p>
 <p>The Rust standard library defines trait <code>std::hash::Hash</code> that must be
 implemented by types that want to be hashed. This trait requires the type to
 implement method <code>fn hash&lt;H&gt;(&amp;self, state: &amp;mut H) where H: Hasher</code>.</p>
