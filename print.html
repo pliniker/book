@@ -3284,7 +3284,7 @@ bumped to slot <code>n + 2</code> because the previous two slots were occupied.<
 <p>If slot <code>n + 1</code> was simply marked as <code>empty</code> after it's occupant was deleted,
 then when searching for <code>Y</code> we wouldn't know to keep searching and find <code>Y</code> in
 slot <code>n + 2</code>. Hence, deleted entries are marked differently to empty slots.</p>
-<p>Here is the code for this function:</p>
+<p>Here is the code for the Find Entry function:</p>
 <pre><code class="language-rust ignore">/// Given a key, generate the hash and search for an entry that either matches this hash
 /// or the next available blank entry.
 fn find_entry&lt;'guard&gt;(
