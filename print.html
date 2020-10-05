@@ -3340,6 +3340,118 @@ course.</li>
 that slot.</li>
 <li>If an exact match is found, return that slot of course.</li>
 </ul>
+<h2><a class="header" href="#the-external-api" id="the-external-api">The external API</a></h2>
+<p>Just as we defined some conainer traits for <code>Array&lt;T&gt;</code> to define access to
+arrays based on stack or indexed style access, we'll define a container trait
+for <code>Dict</code>:</p>
+<pre><code class="language-rust ignore">pub trait HashIndexedAnyContainer {
+    /// Return a pointer to to the object associated with the given key.
+    /// Absence of an association should return an error.
+    fn lookup&lt;'guard&gt;(
+        &amp;self,
+        guard: &amp;'guard dyn MutatorScope,
+        key: TaggedScopedPtr,
+    ) -&gt; Result&lt;TaggedScopedPtr&lt;'guard&gt;, RuntimeError&gt;;
+
+    /// Associate a key with a value.
+    fn assoc&lt;'guard&gt;(
+        &amp;self,
+        mem: &amp;'guard MutatorView,
+        key: TaggedScopedPtr&lt;'guard&gt;,
+        value: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;(), RuntimeError&gt;;
+
+    /// Remove an association by its key.
+    fn dissoc&lt;'guard&gt;(
+        &amp;self,
+        guard: &amp;'guard dyn MutatorScope,
+        key: TaggedScopedPtr,
+    ) -&gt; Result&lt;TaggedScopedPtr&lt;'guard&gt;, RuntimeError&gt;;
+
+    /// Returns true if the key exists in the container.
+    fn exists&lt;'guard&gt;(
+        &amp;self,
+        guard: &amp;'guard dyn MutatorScope,
+        key: TaggedScopedPtr,
+    ) -&gt; Result&lt;bool, RuntimeError&gt;;
+}
+</code></pre>
+<p>This trait contains the external API that <code>Dict</code> will expose for managing
+keys and values. The implementation of each of these methods will be in terms
+of the <code>find_entry()</code> function described above. Let's look at a couple of the
+more complex examples, <code>assoc()</code> and <code>dissoc()</code>.</p>
+<h3><a class="header" href="#assoc" id="assoc">assoc</a></h3>
+<pre><code class="language-rust ignore">impl HashIndexedAnyContainer for Dict {
+    fn assoc&lt;'guard&gt;(
+        &amp;self,
+        mem: &amp;'guard MutatorView,
+        key: TaggedScopedPtr&lt;'guard&gt;,
+        value: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;(), RuntimeError&gt; {
+        let hash = hash_key(mem, key)?;
+
+        let mut data = self.data.get();
+        // check the load factor (what percentage of the capacity is or has been used)
+        if needs_to_grow(self.used_entries.get() + 1, data.capacity()) {
+            // create a new, larger, backing array, and copy all existing entries over
+            self.grow_capacity(mem)?;
+            data = self.data.get();
+        }
+
+        // find the slot whose entry matches the hash or is the nearest available entry
+        let entry = find_entry(mem, &amp;data, hash)?;
+
+        // update counters if necessary
+        if entry.key.is_nil() {
+            // if `key` is nil, this entry is unused: increment the length
+            self.length.set(self.length.get() + 1);
+            if entry.hash == 0 {
+                // if `hash` is 0, this entry has _never_ been used: increment the count
+                // of used entries
+                self.used_entries.set(self.used_entries.get() + 1);
+            }
+        }
+
+        // finally, write the key, value and hash to the entry
+        entry.key.set(key);
+        entry.value.set(value);
+        entry.hash = hash;
+
+        Ok(())
+    }
+}
+</code></pre>
+<h3><a class="header" href="#dissoc" id="dissoc">dissoc</a></h3>
+<pre><code class="language-rust ignore">impl HashIndexedAnyContainer for Dict {
+    fn dissoc&lt;'guard&gt;(
+        &amp;self,
+        guard: &amp;'guard dyn MutatorScope,
+        key: TaggedScopedPtr,
+    ) -&gt; Result&lt;TaggedScopedPtr&lt;'guard&gt;, RuntimeError&gt; {
+        let hash = hash_key(guard, key)?;
+
+        let data = self.data.get();
+        let entry = find_entry(guard, &amp;data, hash)?;
+
+        if entry.key.is_nil() {
+            // a nil key means the key was not found in the Dict
+            return Err(RuntimeError::new(ErrorKind::KeyError));
+        }
+
+        // decrement the length but not the `used_entries` count
+        self.length.set(self.length.get() - 1);
+
+        // write the &quot;tombstone&quot; markers to the entry
+        entry.key.set_to_nil();
+        entry.hash = TOMBSTONE;
+
+        // return the value that was associated with the key
+        Ok(entry.value.get(guard))
+    }
+}
+</code></pre>
+<p>As you can see, once <code>find_entry()</code> is implemented as a separate function,
+these methods become fairly easy to comprehend.</p>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
