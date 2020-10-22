@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>An allocator: Sticky Immix - Writing Interpreters in Rust: a Guide</title>
+        <title>Virtual Machine: Design - Writing Interpreters in Rust: a Guide</title>
         
 
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
@@ -81,7 +81,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="part-allocators.html"><strong aria-hidden="true">2.</strong> Allocation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-alignment.html"><strong aria-hidden="true">2.1.</strong> Alignment</a></li><li class="chapter-item expanded "><a href="chapter-blocks.html"><strong aria-hidden="true">2.2.</strong> Obtaining blocks of memory</a></li><li class="chapter-item expanded "><a href="chapter-what-is-alloc.html"><strong aria-hidden="true">2.3.</strong> The type of allocation</a></li></ol></li><li class="chapter-item expanded "><a href="part-stickyimmix.html" class="active"><strong aria-hidden="true">3.</strong> An allocator: Sticky Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-simple-bump.html"><strong aria-hidden="true">3.1.</strong> Bump allocation</a></li><li class="chapter-item expanded "><a href="chapter-managing-blocks.html"><strong aria-hidden="true">3.2.</strong> Allocating into multiple blocks</a></li><li class="chapter-item expanded "><a href="chapter-allocation-api.html"><strong aria-hidden="true">3.3.</strong> Defining the allocation API</a></li><li class="chapter-item expanded "><a href="chapter-allocation-impl.html"><strong aria-hidden="true">3.4.</strong> Implementing the API</a></li></ol></li><li class="chapter-item expanded "><a href="part-interpreter.html"><strong aria-hidden="true">4.</strong> An interpreter: Eval-rs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-interp-alloc.html"><strong aria-hidden="true">4.1.</strong> Allocating objects and dereferencing safely</a></li><li class="chapter-item expanded "><a href="chapter-interp-tagged-ptrs.html"><strong aria-hidden="true">4.2.</strong> Tagged pointers and object headers</a></li><li class="chapter-item expanded "><a href="chapter-interp-symbols-and-pairs.html"><strong aria-hidden="true">4.3.</strong> Symbols and Pairs</a></li><li class="chapter-item expanded "><a href="chapter-interp-parsing.html"><strong aria-hidden="true">4.4.</strong> Parsing s-expressions</a></li><li class="chapter-item expanded "><a href="chapter-interp-arrays.html"><strong aria-hidden="true">4.5.</strong> Arrays</a></li><li class="chapter-item expanded "><a href="chapter-interp-bytecode.html"><strong aria-hidden="true">4.6.</strong> Bytecode</a></li><li class="chapter-item expanded "><a href="chapter-interp-dicts.html"><strong aria-hidden="true">4.7.</strong> Dicts</a></li><li class="chapter-item expanded "><a href="chapter-interp-vm-design.html"><strong aria-hidden="true">4.8.</strong> Virtual Machine: Design</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.9.</strong> TODO - Compiler: Design</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.10.</strong> TODO - Virtual Machine: Implementation</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.11.</strong> TODO - Compiler: Implementation</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.</strong> Garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.1.</strong> TODO - Tracing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.2.</strong> TODO - Sweeping</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.3.</strong> TODO - Recycling blocks</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.</strong> Advanced garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.1.</strong> TODO - ?</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.</strong> Full Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.1.</strong> TODO - ?</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="part-allocators.html"><strong aria-hidden="true">2.</strong> Allocation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-alignment.html"><strong aria-hidden="true">2.1.</strong> Alignment</a></li><li class="chapter-item expanded "><a href="chapter-blocks.html"><strong aria-hidden="true">2.2.</strong> Obtaining blocks of memory</a></li><li class="chapter-item expanded "><a href="chapter-what-is-alloc.html"><strong aria-hidden="true">2.3.</strong> The type of allocation</a></li></ol></li><li class="chapter-item expanded "><a href="part-stickyimmix.html"><strong aria-hidden="true">3.</strong> An allocator: Sticky Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-simple-bump.html"><strong aria-hidden="true">3.1.</strong> Bump allocation</a></li><li class="chapter-item expanded "><a href="chapter-managing-blocks.html"><strong aria-hidden="true">3.2.</strong> Allocating into multiple blocks</a></li><li class="chapter-item expanded "><a href="chapter-allocation-api.html"><strong aria-hidden="true">3.3.</strong> Defining the allocation API</a></li><li class="chapter-item expanded "><a href="chapter-allocation-impl.html"><strong aria-hidden="true">3.4.</strong> Implementing the API</a></li></ol></li><li class="chapter-item expanded "><a href="part-interpreter.html"><strong aria-hidden="true">4.</strong> An interpreter: Eval-rs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="chapter-interp-alloc.html"><strong aria-hidden="true">4.1.</strong> Allocating objects and dereferencing safely</a></li><li class="chapter-item expanded "><a href="chapter-interp-tagged-ptrs.html"><strong aria-hidden="true">4.2.</strong> Tagged pointers and object headers</a></li><li class="chapter-item expanded "><a href="chapter-interp-symbols-and-pairs.html"><strong aria-hidden="true">4.3.</strong> Symbols and Pairs</a></li><li class="chapter-item expanded "><a href="chapter-interp-parsing.html"><strong aria-hidden="true">4.4.</strong> Parsing s-expressions</a></li><li class="chapter-item expanded "><a href="chapter-interp-arrays.html"><strong aria-hidden="true">4.5.</strong> Arrays</a></li><li class="chapter-item expanded "><a href="chapter-interp-bytecode.html"><strong aria-hidden="true">4.6.</strong> Bytecode</a></li><li class="chapter-item expanded "><a href="chapter-interp-dicts.html"><strong aria-hidden="true">4.7.</strong> Dicts</a></li><li class="chapter-item expanded "><a href="chapter-interp-vm-design.html" class="active"><strong aria-hidden="true">4.8.</strong> Virtual Machine: Design</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.9.</strong> TODO - Compiler: Design</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.10.</strong> TODO - Virtual Machine: Implementation</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">4.11.</strong> TODO - Compiler: Implementation</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.</strong> Garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.1.</strong> TODO - Tracing</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.2.</strong> TODO - Sweeping</a></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">5.3.</strong> TODO - Recycling blocks</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.</strong> Advanced garbage collection</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">6.1.</strong> TODO - ?</a></li></ol></li><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.</strong> Full Immix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="404.html"><strong aria-hidden="true">7.1.</strong> TODO - ?</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -147,63 +147,51 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#an-allocator-sticky-immix" id="an-allocator-sticky-immix">An allocator: Sticky Immix</a></h1>
-<p>Quickly, some terminology:</p>
+                        <h1><a class="header" href="#virtual-machine-architecture-and-design" id="virtual-machine-architecture-and-design">Virtual Machine: Architecture and Design</a></h1>
+<p>In this chapter we will outline some Virtual Machine design choices. </p>
+<h2><a class="header" href="#bytecode" id="bytecode">Bytecode</a></h2>
+<p>To begin with, we already have a specification for bytecode from the earlier
+chapter. To recap: 32 bit fixed opcodes with space for operands that are
+registers. </p>
+<p>That design choice was borrowed primarily from the Lua 5 implementation.</p>
+<h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
+<p>As in Crafting Interpreters, we'll maintain two separate stack data
+structures:</p>
 <ul>
-<li>Mutator: the thread of execution that writes and modifies objects on the heap.</li>
-<li>Live objects: the graph of objects that the mutator can reach, either directly
-from it's stack or indirectly through other reachable objects.</li>
-<li>Dead objects: any object that is disconnected from the mutator's graph of live
-objects.</li>
-<li>Collector: the thread of execution that identifies objects that are no longer
-reachable by the mutator and marks them as free space that can be reused</li>
-<li>Fragmentation: as objects have many different sizes, after allocating and
-freeing many objects, gaps of unused memory appear between objects that are
-too small for most objects but that add up to a measurable percentage of
-wasted space.</li>
-<li>Evacuation: when the collector <em>moves</em> live objects to another block of memory
-so that the originating block can be _de_fragmented</li>
+<li>the register stack</li>
+<li>the call frame stack</li>
 </ul>
-<h2><a class="header" href="#about-immix" id="about-immix">About Immix</a></h2>
-<p>Immix is a memory management scheme that considers blocks of fixed size at a time.
-Each block is divided into lines. In the original paper, blocks are sized at 32k
-and lines at 128 bytes.  Objects are allocated into blocks using bump allocation.
-Objects can cross line boundaries.</p>
-<p>During tracing to discover live objects, objects are marked as live, but the
-line, or lines, that each object occupies are also marked as live. This can mean, of
-course, that a line may contain a dead object and a live object but the whole
-line is marked as live.</p>
-<p>During collection, only lines not marked as live are considered available for
-re-use. Inevitably then, there is acceptance of some amount of fragementation
-at this point.</p>
-<p><em>Full</em> Immix implements evacuating objects out of the most fragmented blocks
-into fresh, empty blocks, for defragmentation.</p>
-<p>For simplicity of implementation, we'll leave out this evacuation operation
-in this guide. This is called <em>Sticky</em> Immix.</p>
-<p>We'll also stick to a single thread for the mutator and collector to avoid the
-complexity overhead of a multi-threaded implementation for now.</p>
-<p>Recommended reading: <a href="http://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">Stephen M. Blackburn &amp; Kathryn S. McKinley - Immix: A Mark-Region Garbage Collector with Space Efficiency, Fast Collection, and Mutator Performance</a></p>
-<h2><a class="header" href="#about-this-part-of-the-book" id="about-this-part-of-the-book">About this part of the book</a></h2>
-<p>This section will describe a Rust crate that implements a Sticky Immix heap.
-As part of this implementation we will dive into the crate API details to
-understand how we can define an interface between the heap and the language
-VM that will come later.</p>
-<p><em>What this is not: custom memory management to replace the global Rust
-allocator! The APIs we arrive at will be substantially incompatible with the
-global Rust allocator.</em></p>
+<p>We'll separate these out because the register stack will be composed entirely
+of <code>TaggedCellPtr</code>s and we don't want to have to allocate every call frame on 
+the heap and store a pointer to it in the register stack or do some very
+unsafe and error prone casting of memory on the register stack itself to store
+call frame entries.</p>
+<h2><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h2>
+<p>Each call frame will have a stack base pointer. This pointer will indicate the
+base position in the register stack at which the called function will see a 
+window of 256 registers. We can make use of Rust slices to enforce bounds 
+checking on this window.</p>
+<h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
+<p>TODO: dict, only symbols can be keys</p>
+<h2><a class="header" href="#closures" id="closures">Closures</a></h2>
+<p>We will borrow one more thing from the Lua 5 compiler/VM, which is also well
+documented in Crafting Interpreters: upvalues.</p>
+<h2><a class="header" href="#instruction-execution" id="instruction-execution">Instruction execution</a></h2>
+<p>TODO: match on opcode
+https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
                         
-                            <a rel="prev" href="chapter-what-is-alloc.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="chapter-interp-dicts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
                         
 
                         
-                            <a rel="next" href="chapter-simple-bump.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next" href="404.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
                         
@@ -215,13 +203,13 @@ global Rust allocator.</em></p>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
                 
-                    <a rel="prev" href="chapter-what-is-alloc.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="chapter-interp-dicts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
                 
 
                 
-                    <a rel="next" href="chapter-simple-bump.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next" href="404.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
                 
