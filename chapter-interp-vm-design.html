@@ -155,30 +155,30 @@ chapter. To recap: 32 bit fixed opcodes with space for operands that are
 registers. </p>
 <p>That design choice was borrowed primarily from the Lua 5 implementation.</p>
 <h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
-<p>As in Crafting Interpreters, we'll maintain two separate stack data
-structures:</p>
+<p>We'll maintain two separate stack data structures:</p>
 <ul>
 <li>the register stack</li>
 <li>the call frame stack</li>
 </ul>
-<p>We'll separate these out because the register stack will be composed entirely
-of <code>TaggedCellPtr</code>s and we don't want to have to allocate every call frame on 
-the heap and store a pointer to it in the register stack or do some very
-unsafe and error prone casting of memory on the register stack itself to store
-call frame entries.</p>
+<p>These are separated out because the register stack will be composed entirely
+of <code>TaggedCellPtr</code>s - we don't want to coerce a call frame into a set of
+tagged pointers or allocate each frame on the heap.</p>
 <h2><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h2>
 <p>Each call frame will have a stack base pointer. This pointer will indicate the
 base position in the register stack at which the called function will see a 
 window of 256 registers. We can make use of Rust slices to enforce bounds 
 checking on this window.</p>
+<h2><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h2>
+<p>TODO</p>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
 <p>TODO: dict, only symbols can be keys</p>
 <h2><a class="header" href="#closures" id="closures">Closures</a></h2>
 <p>We will borrow one more thing from the Lua 5 compiler/VM, which is also well
 documented in Crafting Interpreters: upvalues.</p>
+<h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
 <h2><a class="header" href="#instruction-execution" id="instruction-execution">Instruction execution</a></h2>
 <p>TODO: match on opcode
-https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
+See https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
 
                     </main>
 
