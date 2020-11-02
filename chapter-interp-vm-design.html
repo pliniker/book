@@ -150,24 +150,26 @@
                         <h1><a class="header" href="#virtual-machine-architecture-and-design" id="virtual-machine-architecture-and-design">Virtual Machine: Architecture and Design</a></h1>
 <p>In this chapter we will outline some Virtual Machine design choices. </p>
 <h2><a class="header" href="#bytecode" id="bytecode">Bytecode</a></h2>
-<p>To begin with, we already have a specification for bytecode from the earlier
-chapter. To recap: 32 bit fixed opcodes with space for operands that are
-registers. </p>
-<p>That design choice was borrowed primarily from the Lua 5 implementation.</p>
+<p>We already discussed our Lua-inspired bytecode in a
+<a href="./chapter-interp-bytecode.html">previous chapter</a>. To recap: 32 bit fixed-width 
+opcodes with space for 8 bit register numbers and/or 16 bit literals.</p>
 <h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
 <p>We'll maintain two separate stack data structures:</p>
 <ul>
 <li>the register stack</li>
 <li>the call frame stack</li>
 </ul>
-<p>These are separated out because the register stack will be composed entirely
-of <code>TaggedCellPtr</code>s - we don't want to coerce a call frame into a set of
-tagged pointers or allocate each frame on the heap.</p>
+<p>These are separated out because the register stack will be composed entirely of
+<code>TaggedCellPtr</code>s. We don't want to coerce a call frame struct into a set of 
+tagged pointers or have to allocate each frame on the heap.</p>
 <h2><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h2>
-<p>Each call frame will have a stack base pointer. This pointer will indicate the
-base position in the register stack at which the called function will see a 
-window of 256 registers. We can make use of Rust slices to enforce bounds 
-checking on this window.</p>
+<p>The register stack is an array of <code>TaggedCellPtr</code>s. Thus each stack value can
+point to a heap object or contain a literal integer.</p>
+<p>As operands are limited to 8 bit register numbers, we will interface with the
+stack on a sliding window basis. While each call frame will know it's 
+stack base pointer, the function itself will see only 256 contiguous stack
+locations starting from zero through 255. We can make use of Rust slices to
+create this window into the stack array for each call frame.</p>
 <h2><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h2>
 <p>TODO</p>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
@@ -177,8 +179,8 @@ checking on this window.</p>
 documented in Crafting Interpreters: upvalues.</p>
 <h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
 <h2><a class="header" href="#instruction-execution" id="instruction-execution">Instruction execution</a></h2>
-<p>TODO: match on opcode
-See https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
+<p>TODO: match on opcode See
+https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
 
                     </main>
 
