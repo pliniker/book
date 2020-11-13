@@ -177,7 +177,7 @@ the type id in it, or we could even just use trait objects!</p>
 identified at runtime. Carrying around an extra word per pointer is expensive,
 space-wise, however.</p>
 <h2><a class="header" href="#tagged-pointers" id="tagged-pointers">Tagged pointers</a></h2>
-<p>Many runtimes implement <a href="1">tagged pointers</a> to avoid the space overhead, while
+<p>Many runtimes implement <a href="https://en.wikipedia.org/wiki/Tagged_pointer">tagged pointers</a> to avoid the space overhead, while
 partially improving the time overhead of the header type-id lookup.</p>
 <p>In a pointer to any object on the heap, the least most significant bits turn out
 to always be zero due to word or double-word alignment.</p>

@@ -1825,7 +1825,7 @@ the type id in it, or we could even just use trait objects!</p>
 identified at runtime. Carrying around an extra word per pointer is expensive,
 space-wise, however.</p>
 <h2><a class="header" href="#tagged-pointers" id="tagged-pointers">Tagged pointers</a></h2>
-<p>Many runtimes implement <a href="1">tagged pointers</a> to avoid the space overhead, while
+<p>Many runtimes implement <a href="https://en.wikipedia.org/wiki/Tagged_pointer">tagged pointers</a> to avoid the space overhead, while
 partially improving the time overhead of the header type-id lookup.</p>
 <p>In a pointer to any object on the heap, the least most significant bits turn out
 to always be zero due to word or double-word alignment.</p>
@@ -3459,36 +3459,76 @@ chapter.</p>
 <p>Now, we'll transition to some compiler and virtual machine design before
 we continue with code implementation.</p>
 <h1><a class="header" href="#virtual-machine-architecture-and-design" id="virtual-machine-architecture-and-design">Virtual Machine: Architecture and Design</a></h1>
-<p>In this chapter we will outline some Virtual Machine design choices. </p>
+<p>In this short chapter we will outline our virtual machine design choices. These
+are substantially a matter of pragmatic dynamic language implementation points
+and as such, borrow heavily from uncomplicated prior work such as Lua 5 and 
+Crafting Interpreters.</p>
 <h2><a class="header" href="#bytecode-1" id="bytecode-1">Bytecode</a></h2>
-<p>We already discussed our Lua-inspired bytecode in a
-<a href="./chapter-interp-bytecode.html">previous chapter</a>. To recap: 32 bit fixed-width 
-opcodes with space for 8 bit register numbers and/or 16 bit literals.</p>
+<p>We already discussed our Lua-inspired bytecode in a <a href="./chapter-interp-bytecode.html">previous
+chapter</a>. To recap, we are using 32 bit
+fixed-width opcodes with space for 8 bit register numbers and/or 16 bit
+literals.</p>
 <h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
-<p>We'll maintain two separate stack data structures:</p>
+<p>Just like in <a href="http://craftinginterpreters.com/calls-and-functions.html#call-frames">Crafting Interpreters</a> we'll maintain two separate stack data
+structures:</p>
 <ul>
-<li>the register stack</li>
+<li>the register stack for storing values</li>
 <li>the call frame stack</li>
 </ul>
 <p>These are separated out because the register stack will be composed entirely of
 <code>TaggedCellPtr</code>s. We don't want to coerce a call frame struct into a set of 
 tagged pointers or have to allocate each frame on the heap.</p>
-<h2><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h2>
+<h3><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h3>
 <p>The register stack is an array of <code>TaggedCellPtr</code>s. Thus each stack value can
 point to a heap object or contain a literal integer.</p>
-<p>As operands are limited to 8 bit register numbers, we will interface with the
-stack on a sliding window basis. While each call frame will know it's 
-stack base pointer, the function itself will see only 256 contiguous stack
-locations starting from zero through 255. We can make use of Rust slices to
-create this window into the stack array for each call frame.</p>
-<h2><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h2>
-<p>TODO</p>
+<p>As bytecode operands are limited to 8 bit register indexes, a function is
+limited to a maximum of 256 registers, and therefore can address a maximum of
+256 contiguous stack slots.</p>
+<p>This requires us to implement a sliding window into the register stack which
+will move as functions are called and return. The call frame stack will contain
+the stack base pointer for each function call. and we can use a Rust slice to
+implement the window of 256 contiguous stack slots which a function call is
+limited to.</p>
+<h3><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h3>
+<p>A call frame needs to store three critical data points:</p>
+<ul>
+<li>a pointer to the function being executed</li>
+<li>the return instruction pointer when a nested function is called</li>
+<li>the stack base pointer for the function call</li>
+</ul>
+<p>These three items can form a simple struct and we can define an
+<code>Array&lt;CallFrame&gt;</code> type for optimum performance.</p>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
-<p>TODO: dict, only symbols can be keys</p>
+<p>To store global values, we have all we need: the <code>Dict</code> type that maps <code>Symbol</code>s
+to another value. The VM will, of course, have an abstraction over the internal
+<code>Dict</code> to enforce <code>Symbol</code>s only as keys.</p>
 <h2><a class="header" href="#closures" id="closures">Closures</a></h2>
-<p>We will borrow one more thing from the Lua 5 compiler/VM, which is also well
-documented in Crafting Interpreters: upvalues.</p>
+<p>We'll implement closures using upvalues, just as in Lua 5 and <a href="http://craftinginterpreters.com/closures.html">Crafting
+Interpreters</a>.</p>
+<p>In the classic implementation from Lua 5, followed also by Crafting
+Interpreters, a linked list of upvalues is used to connect stack locations to a
+shared value.  In our implementation, we'll use the <code>Dict</code> type that we already
+have available to do this mapping.  In every other respect, our implementation
+will be very similar.</p>
 <h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
+<p>Here is one point where we will introduce a less common construct in our virtual
+machine. Functions will be first class, that is they are objects that can be
+passed around as values and arguments. On top of that, we'll allow passing
+insufficient arguments to a function when it is called. The return value of
+such an operation will, instead of an error, be a <code>Partial</code> instance. This value
+must carry with it the arguments given and a pointer to the function waiting to
+be called.</p>
+<p>This is far from sufficient for a fully featured currying implementation but is
+an interesting extension to first class functions, especially as it allows us to
+not <em>require</em> lambdas to be constructed syntactically every time they might be
+used.</p>
+<p>By that we mean the following: if we have a function <code>(def mul (x y) (* x y))</code>,
+to turn that into a function that multiplies a number by 3 we'd normally have to
+define a second function, or lambda, <code>(def mul3 (x) (mul x 3))</code> and call it
+instead. However, with a simple partial function implementation we can avoid the
+second function definition and call <code>(mul 3)</code>, which will collect the function
+<code>mul</code> and argument <code>3</code> into a <code>Partial</code> and wait for the final argument before
+calling into the function <code>mul</code> with both required arguments.</p>
 <h2><a class="header" href="#instruction-execution" id="instruction-execution">Instruction execution</a></h2>
 <p>TODO: match on opcode See
 https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
