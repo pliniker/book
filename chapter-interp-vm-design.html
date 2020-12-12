@@ -244,9 +244,17 @@ references to values. or a list of values. A partial is a yet-to-be-called
 function carrying a list of arguments. They look very similar, and it's
 possible, of course, to partially apply arguments to a closure.</p>
 </blockquote>
-<h2><a class="header" href="#instruction-execution" id="instruction-execution">Instruction execution</a></h2>
-<p>TODO: match on opcode See
-https://github.com/rust-hosted-langs/runtimes-WG/issues/3</p>
+<h2><a class="header" href="#instruction-dispatch" id="instruction-dispatch">Instruction dispatch</a></h2>
+<p>The desire is to minimize the machine code overhead between each VM instruction
+code.  This overhead, where the next VM instruction is fetched, decoded and
+mapped to the entry point of the instruction code, is the dispatch code.</p>
+<p>We have some options for interpreter dispatch mechanisms. These are well
+documented. <a href="https://pliniker.github.io/post/dispatchers/">Research</a> into implementing these in Rust concludes that simple
+switch-style dispatch is the only cross-platform construct we can reasonably
+make use of. Other mechanisms come with undesirable complexity and/or platform
+dependent customizations.</p>
+<p>What this looks like: a single <code>match</code> expression with a pattern to represent
+each bytecode discriminant all wrapped in a loop.</p>
 
                     </main>
 
