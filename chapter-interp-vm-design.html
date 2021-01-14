@@ -163,9 +163,16 @@ stack data structures:</p>
 <li>the register stack for storing stack values</li>
 <li>the call frame stack</li>
 </ul>
-<p>These are separated out because the register stack will be composed entirely of
-<code>TaggedCellPtr</code>s. We don't want to coerce a call frame struct into a set of 
-tagged pointers or have to allocate each frame on the heap.</p>
+<p>In our case, these are best separated out because the register stack will be
+composed entirely of <code>TaggedCellPtr</code>s.</p>
+<p>To store call frames on the register stack we would have to either</p>
+<ol>
+<li>allocate every stack frame on the heap with pointers to them from the
+register stack </li>
+<li>or coerce a call frame <code>struct</code> type into the register stack type</li>
+</ol>
+<p>Neither of these is attractive so we will maintain the call frame stack as an
+independent data structure.</p>
 <h3><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h3>
 <p>The register stack is a homogeneous array of <code>TaggedCellPtr</code>s. Thus, no object
 is allocated directly on the stack, all objects are heap allocated and the stack
@@ -178,9 +185,9 @@ function call nesting, the register stack may naturally grow much more than a
 length of 256. </p>
 <p>This requires us to implement a sliding window into the register stack which
 will move as functions are called and return. The call frame stack will contain
-the stack base pointer for each function call and we can happily make use a Rust
-slice to implement the window of 256 contiguous stack slots which a function
-call is limited to.</p>
+the stack base pointer for each function call. We can then happily make use a
+Rust slice to implement the window of 256 contiguous stack slots which a
+function call is limited to.</p>
 <h3><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h3>
 <p>A call frame needs to store three critical data points:</p>
 <ul>
@@ -251,11 +258,19 @@ mapped to the entry point of the instruction code, is the dispatch code.</p>
 <p>We have some options for interpreter dispatch mechanisms. These are well
 documented. <a href="https://pliniker.github.io/post/dispatchers/">Research</a> into implementing these in Rust concludes that simple
 switch-style dispatch is the only cross-platform construct we can reasonably
-make use of. Other mechanisms come with undesirable complexity and/or platform
-dependent customizations. For the most part, with modern CPU branch prediction,
-the cost of switch dispatch is small.</p>
+make use of. Other mechanisms come with undesirable complexity or are platform
+dependent. For the most part, with modern CPU branch prediction, the cost of
+switch dispatch is small.</p>
 <p>What this looks like: a single <code>match</code> expression with a pattern to represent
-each bytecode discriminant, all wrapped in a loop.</p>
+each bytecode discriminant, all wrapped in a loop. To illustrate:</p>
+<pre><code class="language-rust ignore">loop {
+    let opcode = get_next_opcode();
+    match opcode {
+        Opcode::Add(a, x, y) =&gt; { ... },
+        Opcode::Call(f, r, p) =&gt; { ... },
+    }
+}
+</code></pre>
 
                     </main>
 
