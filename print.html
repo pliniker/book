@@ -3466,7 +3466,8 @@ Crafting Interpreters.</p>
 <h2><a class="header" href="#bytecode-1" id="bytecode-1">Bytecode</a></h2>
 <p>We already discussed our Lua-inspired bytecode in a <a href="./chapter-interp-bytecode.html">previous
 chapter</a>. To recap, we are using 32 bit
-fixed-width opcodes with space for 8 bit register numbers and 16 bit literals.</p>
+fixed-width opcodes with space for 8 bit register identifiers and 16 bit
+literals.</p>
 <h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
 <p>Following the example of <a href="http://craftinginterpreters.com/calls-and-functions.html#call-frames">Crafting Interpreters</a> we'll maintain two separate
 stack data structures:</p>
@@ -3476,7 +3477,7 @@ stack data structures:</p>
 </ul>
 <p>In our case, these are best separated out because the register stack will be
 composed entirely of <code>TaggedCellPtr</code>s.</p>
-<p>To store call frames on the register stack we would have to either</p>
+<p>To store call frames on the register stack we would have to either:</p>
 <ol>
 <li>allocate every stack frame on the heap with pointers to them from the
 register stack </li>
@@ -3491,9 +3492,9 @@ only consists of pointers to heap objects. The exception is literal integers
 that fit within the range allowed by a tagged pointer.</p>
 <p>Since this is a register virtual machine, not following stack push and pop
 semantics, and bytecode operands are limited to 8 bit register indexes, a
-function is limited to addressing a maximum of 256 contiguous registers. Due to
-function call nesting, the register stack may naturally grow much more than a
-length of 256. </p>
+function is limited to addressing a maximum of 256 contiguous registers. </p>
+<p>Due to function call nesting, the register stack may naturally grow much more
+than a length of 256. </p>
 <p>This requires us to implement a sliding window into the register stack which
 will move as functions are called and return. The call frame stack will contain
 the stack base pointer for each function call. We can then happily make use a
@@ -3543,18 +3544,17 @@ insufficient arguments to a function when it is called. The return value of
 such an operation will, instead of an error, be a <code>Partial</code> instance. This value
 must carry with it the arguments given and a pointer to the function waiting to
 be called.</p>
-<p>This is far from sufficient for a fully featured currying implementation but is
-an interesting extension to first class functions, especially as it allows us to
+<p>This is insufficient for a fully featured currying implementation but is an
+interesting extension to first class functions, especially as it allows us to
 not <em>require</em> lambdas to be constructed syntactically every time they might be
 used.</p>
 <p>By that we mean the following: if we have a function <code>(def mul (x y) (* x y))</code>,
 to turn that into a function that multiplies a number by 3 we'd normally have to
 define a second function, or lambda, <code>(lambda (x) (mul x 3))</code> and call it
 instead. However, with a simple partial function implementation we can avoid the
-second function definition and call <code>(mul 3)</code> directly, which will collect the
-function pointer for <code>mul</code> and argument <code>3</code> into a <code>Partial</code> and wait for the
-final argument before calling into the function <code>mul</code> with both required
-arguments.</p>
+lambda definition and call <code>(mul 3)</code> directly, which will collect the function
+pointer for <code>mul</code> and argument <code>3</code> into a <code>Partial</code> and wait for the final
+argument before calling into the function <code>mul</code> with both required arguments.</p>
 <blockquote>
 <p><em><strong>Note:</strong></em> We can use the same struct for both closures and partial
 functions. A closure is a yet-to-be-called function carrying a list of
@@ -3563,15 +3563,15 @@ function carrying a list of arguments. They look very similar, and it's
 possible, of course, to partially apply arguments to a closure.</p>
 </blockquote>
 <h2><a class="header" href="#instruction-dispatch" id="instruction-dispatch">Instruction dispatch</a></h2>
-<p>The desire is to minimize the machine code overhead between each VM instruction
-code.  This overhead, where the next VM instruction is fetched, decoded and
-mapped to the entry point of the instruction code, is the dispatch code.</p>
-<p>We have some options for interpreter dispatch mechanisms. These are well
-documented. <a href="https://pliniker.github.io/post/dispatchers/">Research</a> into implementing these in Rust concludes that simple
+<p>In dispatch, one optimal outcome is to minimize the machine code overhead
+between each VM instruction code.  This overhead, where the next VM instruction
+is fetched, decoded and mapped to the entry point of the instruction code, is
+the dispatch code.  The other axis of optimization is code ergonomics.</p>
+<p>Prior <a href="https://pliniker.github.io/post/dispatchers/">research</a> into implementing dispatch in Rust concludes that simple
 switch-style dispatch is the only cross-platform construct we can reasonably
 make use of. Other mechanisms come with undesirable complexity or are platform
-dependent. For the most part, with modern CPU branch prediction, the cost of
-switch dispatch is small.</p>
+dependent. For the most part, with modern CPU branch prediction, the overhead
+of switch dispatch is small.</p>
 <p>What this looks like: a single <code>match</code> expression with a pattern to represent
 each bytecode discriminant, all wrapped in a loop. To illustrate:</p>
 <pre><code class="language-rust ignore">loop {
@@ -3582,6 +3582,8 @@ each bytecode discriminant, all wrapped in a loop. To illustrate:</p>
     }
 }
 </code></pre>
+<h2><a class="header" href="#thats-it" id="thats-it">That's it!</a></h2>
+<p>Next we'll look at the counterpart of VM design - compiler design.</p>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
