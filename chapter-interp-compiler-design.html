@@ -148,6 +148,26 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#compiler-design" id="compiler-design">Compiler: Design</a></h1>
+<p>Drawing from the <a href="./chapter-interp-vm-design.html">VM design</a>, the compiler must
+support the following language constructs:</p>
+<ul>
+<li>function definitions</li>
+<li>anonymous functions</li>
+<li>function calls</li>
+<li>lexical scoping</li>
+<li>closures</li>
+<li>local variables</li>
+<li>global variables</li>
+<li>expressions</li>
+</ul>
+<p>This is a minimally critical set of features that any further language
+constructs can be built on while ensuring that our compiler remains easy to
+understand for the purposes of this book.</p>
+<p><a href="./chapter-interp-parsing.html">Our parser, recall</a>, reads in s-expression syntax
+and produces a nested <code>Pair</code> and <code>Symbol</code> based data structure. Adding other
+types - integers, strings, arrays etc - is a matter of expanding the parser.
+The compiler as described here, being for a dynamically typed language, should
+support them without needing to be refactored.</p>
 
                     </main>
 

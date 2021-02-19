@@ -3585,6 +3585,26 @@ each bytecode discriminant, all wrapped in a loop. To illustrate:</p>
 <h2><a class="header" href="#thats-it" id="thats-it">That's it!</a></h2>
 <p>Next we'll look at the counterpart of VM design - compiler design.</p>
 <h1><a class="header" href="#compiler-design" id="compiler-design">Compiler: Design</a></h1>
+<p>Drawing from the <a href="./chapter-interp-vm-design.html">VM design</a>, the compiler must
+support the following language constructs:</p>
+<ul>
+<li>function definitions</li>
+<li>anonymous functions</li>
+<li>function calls</li>
+<li>lexical scoping</li>
+<li>closures</li>
+<li>local variables</li>
+<li>global variables</li>
+<li>expressions</li>
+</ul>
+<p>This is a minimally critical set of features that any further language
+constructs can be built on while ensuring that our compiler remains easy to
+understand for the purposes of this book.</p>
+<p><a href="./chapter-interp-parsing.html">Our parser, recall</a>, reads in s-expression syntax
+and produces a nested <code>Pair</code> and <code>Symbol</code> based data structure. Adding other
+types - integers, strings, arrays etc - is a matter of expanding the parser.
+The compiler as described here, being for a dynamically typed language, should
+support them without needing to be refactored.</p>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
