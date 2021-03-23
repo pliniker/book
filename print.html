@@ -3601,18 +3601,25 @@ support the following language constructs:</p>
 constructs can be built on while ensuring that our compiler remains easy to
 understand for the purposes of this book.</p>
 <p><a href="./chapter-interp-parsing.html">Our parser, recall</a>, reads in s-expression syntax
-and produces a nested <code>Pair</code> and <code>Symbol</code> based data structure. Adding other
-types - integers, strings, arrays etc - is mostly a matter of expanding the
-parser.  The compiler as described here, being for a dynamically typed
+and produces a nested <code>Pair</code> and <code>Symbol</code> based abstract syntax tree. Adding
+other types - integers, strings, arrays etc - is mostly a matter of expanding
+the parser.  The compiler as described here, being for a dynamically typed
 language, will support them without refactoring.</p>
 <h2><a class="header" href="#evalapply" id="evalapply">Eval/apply</a></h2>
-<p>Our compiler design is fundamentally based on the eval/apply pattern.</p>
-<p>In this pattern we recursively descend into the <code>Pair</code> tree, beginning with
-calling eval with the root node.</p>
-<p>The simplest understanding of eval/apply is that eval looks at leaves of
-the tree while apply looks at compositions of leaves.</p>
-<h3><a class="header" href="#eval" id="eval">Eval</a></h3>
-<p>Eval looks at the given node and attempts to generate an instruction for it
+<p>Our compiler design is based on the <em>eval/apply</em> pattern.</p>
+<p>In this pattern we recursively descend into the <code>Pair</code> AST, beginning with
+calling <em>eval</em> on the root node of the expression to be compiled.</p>
+<p><em>Eval</em> is, of course, short for &quot;evaluate&quot; - we want to evaluate the given
+expression. In our case, the immediate requirement is not the result but the
+sequence of instructions that will generate the result, that will evaluate the
+expression.</p>
+<p>More concretely, <em>eval</em> looks at the node in the AST it is given and if it
+resolves to fetching a value for a variable, it generates that instruction;
+otherwise if it is a function call, the arguments are evaluated and then the
+function and arguments are passed to <em>apply</em>, which generates appropriate
+function call instructions.</p>
+<h3><a class="header" href="#implementing-eval" id="implementing-eval">Implementing Eval</a></h3>
+<p><em>Eval</em> looks at the given node and attempts to generate an instruction for it
 that would resolve the node to a value - that is, evaluate it.</p>
 <h4><a class="header" href="#symbols" id="symbols">Symbols</a></h4>
 <p>If the node is a special symbol, such as <code>nil</code> or <code>true</code>, then it is treated as
@@ -3625,9 +3632,9 @@ into a register.</p>
 <p><strong>Local</strong>: the symbol has been declared earlier in the expression using <code>let</code> and
 the compiler already has a record of that - the symbol is associated with a
 local register index and a simple lookup instruction is generated.</p>
-<p><strong>Non-local</strong>: the symbol has been bound in a parent function. Again, the
-compiler has a record of the declaration, which register is associated with the
-symbol and which relative call frame will contain that register. An upvalue
+<p><strong>Non-local</strong>: the symbol has been bound in a parent nesting function. Again,
+the compiler has a record of the declaration, which register is associated with
+the symbol and which relative call frame will contain that register. An upvalue
 lookup instruction is generated.</p>
 <p><strong>Global</strong>: if the symbol isn't found as a local binding or a non-local binding,
 it is assumed to be a global, and a late-binding global lookup instruction is
@@ -3635,7 +3642,7 @@ generated. In the event the programmer has misspelled a variable name, this is
 possibly the instruction that will be generated and the programmer will see an
 unknown-variable error at runtime.</p>
 <h4><a class="header" href="#expressions-and-function-calls" id="expressions-and-function-calls">Expressions and function calls</a></h4>
-<p>When eval is passed a <code>Pair</code>, this represents the beginning of an expression,
+<p>When <em>eval</em> is passed a <code>Pair</code>, this represents the beginning of an expression,
 or a function call. A composition of things.</p>
 <p>In s-expression syntax, a function call looks like <code>(function_name arg1 arg2)</code>.
 That is parsed into a <code>Pair</code> tree, which takes the form:</p>
@@ -3650,9 +3657,17 @@ That is parsed into a <code>Pair</code> tree, which takes the form:</p>
   )
 )
 </code></pre>
-<p>It is apply's job to handle this case, so eval extracts the first and second
-values from the outermost <code>Pair</code> and passes them into apply. </p>
-<h3><a class="header" href="#apply" id="apply">Apply</a></h3>
+<p>It is <em>apply</em>'s job to handle this case, so <em>eval</em> extracts the first and
+second values from the outermost <code>Pair</code> and passes them into apply. In more
+general terms, <em>eval</em> calls <em>apply</em> with the function name and the argument
+list and leaves the rest up to <em>apply</em>.</p>
+<h3><a class="header" href="#implementing-apply" id="implementing-apply">Implementing Apply</a></h3>
+<p><em>Apply</em> takes a function name and a list of arguments. It generates
+instructions to first evaluate each argument, then call the function with the
+argument results.</p>
+<h4><a class="header" href="#built-in-functions" id="built-in-functions">Built in functions</a></h4>
+<h4><a class="header" href="#compiling-functions" id="compiling-functions">Compiling functions</a></h4>
+<h4><a class="header" href="#compiling-let" id="compiling-let">Compiling let</a></h4>
 <h2><a class="header" href="#register-allocation" id="register-allocation">Register allocation</a></h2>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
