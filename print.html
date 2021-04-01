@@ -3700,6 +3700,37 @@ always as the zeroth register.</p>
 <p>When the function call returns, all registers except the return value are
 discarded.</p>
 <h4><a class="header" href="#compiling-functions" id="compiling-functions">Compiling functions</a></h4>
+<p>Compiling a function requires a few inputs:</p>
+<ul>
+<li>an optional reference to a parent nesting function</li>
+<li>an optional function name</li>
+<li>a list of argument names</li>
+<li>a list of expressions that will compute the return value</li>
+</ul>
+<p>The desired output is a data structure that combines:</p>
+<ul>
+<li>the optional function name</li>
+<li>the argument names</li>
+<li>the compiled bytecode</li>
+</ul>
+<p>First, a scope structure is established. A scope is a lexical nesting block in
+which variables are bound and unbound. In the compiler, this structure is
+simply a mapping of variable name to the register number that contains the
+value.</p>
+<p>The first variables to be bound in the function's scope are the argument names.
+The compiler, given the list of argument names to the function and the order in
+which the arguments are given, associates each argument name with the register
+number that will contain it's value. As we saw above, these are predictably and
+reliably registers 2 and upward, one for each argument.</p>
+<p>A scope may have a parent scope if the function is defined within another
+function. This is how nonlocal variable references will be looked up. We will
+go further into that when we discuss closures.</p>
+<p>The second step is to <em>eval</em> each expression in the function, assigning the
+result to register 0, the preallocated return value register. The result of
+compiling each expression via <em>eval</em> is bytecode.</p>
+<p>Thirdly and finally, a function object is instantiated, given the name, the
+argument names and the bytecode.</p>
+<h4><a class="header" href="#compiling-closures" id="compiling-closures">Compiling closures</a></h4>
 <h4><a class="header" href="#compiling-let" id="compiling-let">Compiling let</a></h4>
 <h2><a class="header" href="#register-allocation" id="register-allocation">Register allocation</a></h2>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
