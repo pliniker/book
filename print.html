@@ -3728,9 +3728,23 @@ go further into that when we discuss closures.</p>
 <p>The second step is to <em>eval</em> each expression in the function, assigning the
 result to register 0, the preallocated return value register. The result of
 compiling each expression via <em>eval</em> is bytecode.</p>
-<p>Thirdly and finally, a function object is instantiated, given the name, the
+<p>Thirdly and finally, a function object is instantiated, given it's name, the
 argument names and the bytecode.</p>
 <h4><a class="header" href="#compiling-closures" id="compiling-closures">Compiling closures</a></h4>
+<p>During compilation of the expressions within a function, if any of those
+expressions reference non-local variables (that is, variables not declared
+within the scope of the function) then the function object needs additional
+data to describe how to access those non-local variables at runtime.</p>
+<p>In the below example, the anonymous inner function references the parameter
+to the outer function, <code>n</code>. When the inner function is returned, the value
+of <code>n</code> must be carried with it even after the stack scope of the outer
+function is popped and later overwritten with values for other functions.</p>
+<pre><code>(def make_adder (n) 
+  (lambda (x) (+ x n))
+)
+</code></pre>
+<p><em>Eval</em>, when presented with a symbol to evaluate that has not been declared
+in the function scope, ...</p>
 <h4><a class="header" href="#compiling-let" id="compiling-let">Compiling let</a></h4>
 <h2><a class="header" href="#register-allocation" id="register-allocation">Register allocation</a></h2>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
