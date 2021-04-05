@@ -3736,15 +3736,24 @@ expressions reference non-local variables (that is, variables not declared
 within the scope of the function) then the function object needs additional
 data to describe how to access those non-local variables at runtime.</p>
 <p>In the below example, the anonymous inner function references the parameter
-to the outer function, <code>n</code>. When the inner function is returned, the value
-of <code>n</code> must be carried with it even after the stack scope of the outer
-function is popped and later overwritten with values for other functions.</p>
+<code>n</code> to the outer function, <code>n</code>. When the inner function is returned, the value
+of <code>n</code> must be carried with it even after the stack scope of the outer function
+is popped and later overwritten with values for other functions.</p>
 <pre><code>(def make_adder (n) 
   (lambda (x) (+ x n))
 )
 </code></pre>
-<p><em>Eval</em>, when presented with a symbol to evaluate that has not been declared
-in the function scope, ...</p>
+<p><em>Eval</em>, when presented with a symbol to evaluate that has not been declared in
+the function scope, searches outer scopes next. If a binding is found in an
+outer scope, an upvalue reference is added to the function's <em>local</em> scope that
+points to the outer scope and a <code>GetUpvalue</code> instruction is compiled.</p>
+<p>This upvalue is a combination of two values: a count of stack frames to skip
+over to find the outer scope variable, the register offset in that stack frame.
+The VM will use these to identify the location on the stack where a non-local
+variable should be read from.</p>
+<p>Upvalues are added to the function object that is returned by the function
+compiler.</p>
+<p>Closing over ...</p>
 <h4><a class="header" href="#compiling-let" id="compiling-let">Compiling let</a></h4>
 <h2><a class="header" href="#register-allocation" id="register-allocation">Register allocation</a></h2>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
