@@ -170,16 +170,15 @@ the parser.  The compiler as described here, being for a dynamically typed
 language, will support them without refactoring.</p>
 <h2><a class="header" href="#evalapply" id="evalapply">Eval/apply</a></h2>
 <p>Our compiler design is based on the <em>eval/apply</em> pattern.</p>
-<p>In this pattern we recursively descend into the <code>Pair</code> AST, beginning with
-calling <em>eval</em> on the root node of the expression to be compiled.</p>
+<p>In this pattern we recursively descend into the <code>Pair</code> AST, calling <em>eval</em> on
+the root node of the expression to be compiled.</p>
 <p><em>Eval</em> is, of course, short for &quot;evaluate&quot; - we want to evaluate the given
-expression. In our case, the immediate requirement is not the result but the
-sequence of instructions that will generate the result, that will evaluate the
-expression.</p>
+expression. In the case of a compiler, we don't want the result yet, rather
+the sequence of instructions that will generate the result.</p>
 <p>More concretely, <em>eval</em> looks at the node in the AST it is given and if it
 resolves to fetching a value for a variable, it generates that instruction;
-otherwise if it is a function call, the arguments are evaluated and then the
-function and arguments are passed to <em>apply</em>, which generates appropriate
+otherwise if it is a compound expression, the arguments are evaluated and then
+the function and arguments are passed to <em>apply</em>, which generates appropriate
 function call instructions.</p>
 <h3><a class="header" href="#implementing-eval" id="implementing-eval">Implementing Eval</a></h3>
 <p><em>Eval</em> looks at the given node and attempts to generate an instruction for it
@@ -192,13 +191,14 @@ next available register.</p>
 (it must be a variable) and an instruction is generated for fetching the value
 into a register.</p>
 <p>Variables come in three kinds: local, nonlocal or global.</p>
-<p><strong>Local</strong>: the symbol has been declared earlier in the expression using <code>let</code> and
-the compiler already has a record of that - the symbol is associated with a
-local register index and a simple lookup instruction is generated.</p>
+<p><strong>Local</strong>: the symbol has been declared earlier in the expression (either it is
+a function parameter or it was declared using <code>let</code>) and the compiler already
+has a record of it. The symbol is already associated with a local register
+index and a simple register copy instruction is generated.</p>
 <p><strong>Nonlocal</strong>: the symbol has been bound in a parent nesting function. Again,
-the compiler has a record of the declaration, which register is associated with
-the symbol and which relative call frame will contain that register. An upvalue
-lookup instruction is generated.</p>
+the compiler already has a record of the declaration, which register is
+associated with the symbol and which relative call frame will contain that
+register. An upvalue lookup instruction is generated.</p>
 <p><strong>Global</strong>: if the symbol isn't found as a local binding or a nonlocal binding,
 it is assumed to be a global, and a late-binding global lookup instruction is
 generated. In the event the programmer has misspelled a variable name, this is
@@ -206,9 +206,10 @@ possibly the instruction that will be generated and the programmer will see an
 unknown-variable error at runtime.</p>
 <h4><a class="header" href="#expressions-and-function-calls" id="expressions-and-function-calls">Expressions and function calls</a></h4>
 <p>When <em>eval</em> is passed a <code>Pair</code>, this represents the beginning of an expression,
-or a function call. A composition of things.</p>
-<p>In s-expression syntax, a function call looks like <code>(function_name arg1 arg2)</code>.
-That is parsed into a <code>Pair</code> tree, which takes the form:</p>
+a function call. A composition of things.</p>
+<p>In s-expression syntax, all expressions and function calls looks like
+<code>(function_name arg1 arg2)</code>.  That is parsed into a <code>Pair</code> tree, which takes
+the form:</p>
 <pre><code>Pair(
   Symbol(function_name),
   Pair(
@@ -225,9 +226,9 @@ second values from the outermost <code>Pair</code> and passes them into apply. I
 general terms, <em>eval</em> calls <em>apply</em> with the function name and the argument
 list and leaves the rest up to <em>apply</em>.</p>
 <h3><a class="header" href="#implementing-apply" id="implementing-apply">Implementing Apply</a></h3>
-<p><em>Apply</em> takes a function name and a list of arguments. It generates
-instructions to first evaluate each argument, then call the function with the
-argument results.</p>
+<p><em>Apply</em> takes a function name and a list of arguments. First it recurses into
+<em>eval</em> for each argument expression, then  generates instructions to call the
+function with the argument results.</p>
 <h4><a class="header" href="#calling-functions" id="calling-functions">Calling functions</a></h4>
 <p>Functions are either built into to the language and VM or are
 library/user-defined functions composed of other functions.</p>
@@ -285,10 +286,9 @@ expression <code>(is? x true)</code>.</p>
 <li>the argument names</li>
 <li>the compiled bytecode</li>
 </ul>
-<p>First, a scope structure is established. A scope is a lexical nesting block in
-which variables are bound and unbound. In the compiler, this structure is
-simply a mapping of variable name to the register number that contains the
-value.</p>
+<p>First, a scope structure is established. A scope is a lexical block in which
+variables are bound and unbound. In the compiler, this structure is simply a
+mapping of variable name to the register number that contains the value.</p>
 <p>The first variables to be bound in the function's scope are the argument names.
 The compiler, given the list of argument names to the function and the order in
 which the arguments are given, associates each argument name with the register
