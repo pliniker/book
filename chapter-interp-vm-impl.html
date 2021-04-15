@@ -148,6 +148,83 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#virtual-machine-implementation" id="virtual-machine-implementation">Virtual Machine: Implementation</a></h1>
+<p>This chapter will explain some of the more interesting implementation details
+of our virtual machine.</p>
+<p>We'll begin by defining a struct for a thread of execution:</p>
+<pre><code class="language-rust ignore">pub struct Thread {
+    /// An array of CallFrames
+    frames: CellPtr&lt;CallFrameList&gt;,
+    /// An array of pointers any object type
+    stack: CellPtr&lt;List&gt;,
+    /// The current stack base pointer
+    stack_base: Cell&lt;ArraySize&gt;,
+    /// A dict that should only contain Number keys and Upvalue values. This is a mapping of
+    /// absolute stack indeces to Upvalue objects where stack values are closed over.
+    upvalues: CellPtr&lt;Dict&gt;,
+    /// A dict that should only contain Symbol keys but any type as values
+    globals: CellPtr&lt;Dict&gt;,
+    /// The current instruction location
+    instr: CellPtr&lt;InstructionStream&gt;,
+}
+</code></pre>
+<h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
+<p>The stack is separated into a stack of <code>CallFrame</code> instances and a register
+stack.</p>
+<h3><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h3>
+<pre><code class="language-rust ignore">pub struct Thread {
+    ...
+    stack: CellPtr&lt;List&gt;,
+    stack_base: Cell&lt;ArraySize&gt;
+    ...
+}
+</code></pre>
+<p>Remember that the <code>List</code> type is defined as <code>Array&lt;TaggedCellPtr&gt;</code> and is
+therefore an array of tagged pointers. Thus, the register stack is a homogenous
+array of word sized values that are pointers to objects on the heap or values
+that can be inlined in the tagged pointer word.</p>
+<h3><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h3>
+<pre><code class="language-rust ignore">pub struct Thread {
+    ...
+    frames: CellPtr&lt;CallFrameList&gt;
+    ...
+}
+</code></pre>
+<p>Where <code>CallFrameList</code> is defined as</p>
+<pre><code class="language-rust ignore">pub type CallFrameList = Array&lt;CallFrame&gt;;
+</code></pre>
+<p>and a <code>CallFrame</code> struct is defined as:</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct CallFrame {
+    /// Pointer to the Function being executed
+    function: CellPtr&lt;Function&gt;,
+    /// Return IP when returning from a nested function call
+    ip: Cell&lt;ArraySize&gt;,
+    /// Stack base - index into the register stack where register window for this function begins
+    base: ArraySize,
+}
+</code></pre>
+<p>A <code>CallFrame</code> contains all the information needed to resume a function when
+a nested function call returns:</p>
+<ul>
+<li>the <code>Function</code> object, which references the <code>Bytecode</code> comprising the
+function</li>
+<li>the return instruction pointer</li>
+<li>the stack base index for the function's stack register window</li>
+</ul>
+<p>On every function call, a <code>CallFrame</code> instance is pushed on to the <code>Thread</code>'s
+frames list. </p>
+<h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
+<h2><a class="header" href="#closures-and-upvalues" id="closures-and-upvalues">Closures and upvalues</a></h2>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct Upvalue {
+    // Upvalue location can't be a pointer because it would be a pointer into the dynamically
+    // alloocated stack List - the pointer would be invalidated if the stack gets reallocated.
+    value: TaggedCellPtr,
+    closed: Cell&lt;bool&gt;,
+    location: ArraySize,
+}
+</code></pre>
+<h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
 
                     </main>
 
