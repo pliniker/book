@@ -148,9 +148,9 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#virtual-machine-implementation" id="virtual-machine-implementation">Virtual Machine: Implementation</a></h1>
-<p>This chapter will explain some of the more interesting implementation details
+<p>This chapter will explain some of the more important implementation details
 of our virtual machine.</p>
-<p>We'll begin by defining a struct for a thread of execution:</p>
+<p>We'll begin by laying out a struct for a single thread of execution:</p>
 <pre><code class="language-rust ignore">pub struct Thread {
     /// An array of CallFrames
     frames: CellPtr&lt;CallFrameList&gt;,
@@ -167,6 +167,10 @@ of our virtual machine.</p>
     instr: CellPtr&lt;InstructionStream&gt;,
 }
 </code></pre>
+<p>This struct contains every data structure needed to represent global values,
+stack values, closed-over stack values, function call frames and instructions
+to execute.</p>
+<p>Let's look at each one of these next.</p>
 <h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
 <p>The stack is separated into a stack of <code>CallFrame</code> instances and a register
 stack.</p>
@@ -213,6 +217,25 @@ function</li>
 </ul>
 <p>On every function call, a <code>CallFrame</code> instance is pushed on to the <code>Thread</code>'s
 frames list. </p>
+<h3><a class="header" href="#function-objects" id="function-objects">Function objects</a></h3>
+<p>Since we've mentioned <code>Function</code> objects above, let's have a look at the
+definition.</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct Function {
+    /// name could be a Symbol, or nil if it is an anonymous fn
+    name: TaggedCellPtr,
+    /// Number of arguments required to activate the function
+    arity: u8,
+    /// Instructions comprising the function code
+    code: CellPtr&lt;ByteCode&gt;,
+    /// Param names are stored for introspection of a function signature
+    param_names: CellPtr&lt;List&gt;,
+    /// List of (CallFrame-index: u8 | Window-index: u8) relative offsets from this function's
+    /// declaration where nonlocal variables will be found. Needed when creating a closure. May be
+    /// nil
+    nonlocal_refs: TaggedCellPtr,
+}
+</code></pre>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
 <h2><a class="header" href="#closures-and-upvalues" id="closures-and-upvalues">Closures and upvalues</a></h2>
 <pre><code class="language-rust ignore">#[derive(Clone)]
