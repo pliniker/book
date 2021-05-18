@@ -3821,15 +3821,16 @@ of our virtual machine.</p>
 <p>This struct contains every data structure needed to represent global values,
 stack values, closed-over stack values, function call frames and instructions
 to execute.</p>
-<p>Let's look at each one of these next.</p>
+<p>Let's look at each one of these.</p>
 <h2><a class="header" href="#the-stack-1" id="the-stack-1">The stack</a></h2>
 <p>The stack is separated into a stack of <code>CallFrame</code> instances and a register
 stack.</p>
 <h3><a class="header" href="#the-register-stack-1" id="the-register-stack-1">The register stack</a></h3>
+<p>In our <code>Thread</code> struct, the register stack is represented by the two members:</p>
 <pre><code class="language-rust ignore">pub struct Thread {
     ...
     stack: CellPtr&lt;List&gt;,
-    stack_base: Cell&lt;ArraySize&gt;
+    stack_base: Cell&lt;ArraySize&gt;,
     ...
 }
 </code></pre>
@@ -3838,9 +3839,11 @@ therefore an array of tagged pointers. Thus, the register stack is a homogenous
 array of word sized values that are pointers to objects on the heap or values
 that can be inlined in the tagged pointer word.</p>
 <h3><a class="header" href="#the-call-frame-stack-1" id="the-call-frame-stack-1">The call frame stack</a></h3>
+<p>In our <code>Thread</code> struct, the call frame stack is represented by the member:</p>
 <pre><code class="language-rust ignore">pub struct Thread {
     ...
-    frames: CellPtr&lt;CallFrameList&gt;
+    frames: CellPtr&lt;CallFrameList&gt;,
+    instr: CellPtr&lt;InstructionStream&gt;,
     ...
 }
 </code></pre>
@@ -3868,8 +3871,20 @@ function</li>
 </ul>
 <p>On every function call, a <code>CallFrame</code> instance is pushed on to the <code>Thread</code>'s
 frames list. </p>
-<h3><a class="header" href="#function-objects" id="function-objects">Function objects</a></h3>
-<p>Since we've mentioned <code>Function</code> objects above, let's have a look at the
+<p>Directly related to the call frame stack is the current instruction pointer.
+This is the <code>Thread</code> member <code>instr: CellPtr&lt;InstructionStream&gt;</code>,</p>
+<p>For a review of the definition of <code>InstructionStream</code> see the
+<a href="./chapter-interp-bytecode.html">bytecode</a> chapter where we defined it as
+a pair of values - a <code>ByteCode</code> reference and a pointer to the next <code>Opcode</code>
+to fetch.</p>
+<p>The VM keeps the <code>InstructionStream</code> object pointing at the same <code>ByteCode</code>
+object as is pointed at by the <code>Function</code> in the <code>CallFrame</code> at the top of
+the call frame stack. Thus, when a call frame is popped off the stack, the
+<code>InstructionStream</code> is updated with the <code>ByteCode</code> and instruction pointer
+from the <code>CallFrame</code> at the new stack top; and similarly when a function
+is called <em>into</em> and a new <code>CallFrame</code> is pushed on to the stack.</p>
+<h2><a class="header" href="#function-objects" id="function-objects">Function objects</a></h2>
+<p>Since we've mentioned <code>Function</code> objects above, let's now have a look at the
 definition.</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct Function {
@@ -3887,7 +3902,22 @@ pub struct Function {
     nonlocal_refs: TaggedCellPtr,
 }
 </code></pre>
-<h2><a class="header" href="#global-values-1" id="global-values-1">Global values</a></h2>
+<p>Instances of <code>Function</code> are produced by the compiler, one for each function
+definition that is compiled.</p>
+<p>A <code>Function</code> object is a simple collection of values, some of which may be
+<code>nil</code>. Any member represented by a <code>TaggedCellPtr</code> may, of course, contain
+a <code>nil</code> value.</p>
+<p>Thus the function may be anonymous, represented by a <code>nil</code> name member value.
+While the function name is optional, the parameter names are always included.
+While they do not need to be known in order to execute the function, they are
+useful for representing the function if the programmer needs to introspect a
+function object.</p>
+<p>Members that are required to execute the function are the arity, the <code>ByteCode</code>
+and any nonlocal references.</p>
+<p>Nonlocal references are an optional list of <code>(relative_stack_frame, register)</code>
+values provided by the compiler that are needed to locate nonlocal variables on
+the register stack. These are, of course, a key component of implementing
+closures.</p>
 <h2><a class="header" href="#closures-and-upvalues" id="closures-and-upvalues">Closures and upvalues</a></h2>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct Upvalue {
@@ -3899,6 +3929,9 @@ pub struct Upvalue {
 }
 </code></pre>
 <h2><a class="header" href="#partial-functions-1" id="partial-functions-1">Partial functions</a></h2>
+<h2><a class="header" href="#global-values-1" id="global-values-1">Global values</a></h2>
+<h2><a class="header" href="#tieing-it-all-together" id="tieing-it-all-together">Tieing it all together</a></h2>
+<include VM code snippets here>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
