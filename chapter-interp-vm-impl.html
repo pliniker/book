@@ -219,7 +219,7 @@ function</li>
 <li>the stack base index for the function's stack register window</li>
 </ul>
 <p>On every function call, a <code>CallFrame</code> instance is pushed on to the <code>Thread</code>'s
-frames list. </p>
+frames list.</p>
 <p>Directly related to the call frame stack is the current instruction pointer.
 This is the <code>Thread</code> member <code>instr: CellPtr&lt;InstructionStream&gt;</code>,</p>
 <p>For a review of the definition of <code>InstructionStream</code> see the
@@ -266,8 +266,53 @@ and any nonlocal references.</p>
 <p>Nonlocal references are an optional list of <code>(relative_stack_frame, register)</code>
 values provided by the compiler that are needed to locate nonlocal variables on
 the register stack. These are, of course, a key component of implementing
-closures.</p>
-<h2><a class="header" href="#closures-and-upvalues" id="closures-and-upvalues">Closures and upvalues</a></h2>
+closures. We'll talk about closures shortly, but before we do, we'll extend
+<code>Function</code>s with partial application of arguments.</p>
+<h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
+<p>A partial function application takes a subset of the arguments required to
+make a function call. These arguments must be stored for later and can be
+added to over multiple partial applications of the same function.</p>
+<p>Thus, a <code>Partial</code> object references the <code>Function</code> to be called and a list
+of arguments to give it when the call happens. Below is the definition
+of <code>Partial</code>. Note that it also contains a possible closure environment.
+We'll discuss that in the next section.</p>
+<pre><code class="language-rust ignore">#[derive(Clone)]
+pub struct Partial {
+    /// Remaining number of arguments required to activate the function
+    arity: u8,
+    /// Number of arguments already applied
+    used: u8,
+    /// List of argument values already applied
+    args: CellPtr&lt;List&gt;,
+    /// Closure environment - must be either nil or a List of Upvalues
+    env: TaggedCellPtr,
+    /// Function that will be activated when all arguments are applied
+    func: CellPtr&lt;Function&gt;,
+}
+</code></pre>
+<p>The <code>arity</code> and <code>used</code> members indicate how many arguments are expected and how
+many have been given. These are provided directly in this struct rather than
+requiring dereferencing the <code>arity</code> on the <code>Function</code> object and the length of
+the <code>args</code> list. This is for convenience and performance.</p>
+<p>Each time more arguments are added to a <code>Partial</code>, a new <code>Partial</code> instance must
+be allocated and the existing arguments copied over. Essentially, a <code>Partial</code>
+object, once created, is immutable.</p>
+<h2><a class="header" href="#closures" id="closures">Closures</a></h2>
+<p>Closures and partial applications have, at an abstract level, something in
+common: they both reference values that the function will need when it is
+finally called and need to carry these references around with them.</p>
+<p>We can extend the <code>Partial</code> definition with a closure environment so that we
+can use the same object type everywhere to represent a function pointer,
+applied arguments and closure environment as needed. This will maximize
+flexibility and simplicity in our language and VM design.</p>
+<p>The compiler, because it keeps track of variable names and scopes, knows when a
+<code>Function</code> references nonlocal variables. When such a function is going to be
+referenced to be called next or at some later time, the compiler emits a
+<code>MakeClosure</code> instruction.</p>
+<p>The VM, when it executes <code>MakeClosure</code>, creates a new <code>Partial</code> object.  It
+then iterates over the list of nonlocal references and allocates an <code>Upvalue</code>
+object for each, which are added to the <code>env</code> member on the <code>Partial</code> object.
+The <code>Upvalue</code> struct is defined as:</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct Upvalue {
     // Upvalue location can't be a pointer because it would be a pointer into the dynamically
@@ -277,9 +322,21 @@ pub struct Upvalue {
     location: ArraySize,
 }
 </code></pre>
-<h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
+<p>An <code>Upvalue</code> is an object that references a register stack location (that is
+the <code>location</code> member.) The initial value of <code>closed</code> is <code>false</code>.  In this
+state, the location on the stack that contains the variable <em>must</em> be a valid
+location. That is, the stack can not have been unwound yet.  If the closure is
+called, <code>Upvalue</code>s in this state are simply an indirection between the function
+and the variable on the register stack.</p>
+<p>The compiler is able to keep track of variables and whether they are closed
+over. It emits bytecode instructions to close <code>Upvalue</code> objects when
+closed-over variables go out of scope. This instruction, <code>CloseUpvalues</code>,
+copies the variable from the register stack to the <code>value</code> member of the
+<code>Upvalue</code> object and sets <code>closed</code> to <code>true</code>. From now on, when the closure
+reads or writes to this variable, the value on the <code>Upvalue</code> object is modified
+rather than the location on the register stack.</p>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
-<h2><a class="header" href="#tieing-it-all-together" id="tieing-it-all-together">Tieing it all together</a></h2>
+<h2><a class="header" href="#tying-it-all-together" id="tying-it-all-together">Tying it all together</a></h2>
 <include VM code snippets here>
 
                     </main>
