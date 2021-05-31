@@ -270,8 +270,7 @@ closures. We'll talk about closures shortly, but before we do, we'll extend
 <code>Function</code>s with partial application of arguments.</p>
 <h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
 <p>A partial function application takes a subset of the arguments required to
-make a function call. These arguments must be stored for later and can be
-added to over multiple partial applications of the same function.</p>
+make a function call. These arguments must be stored for later.</p>
 <p>Thus, a <code>Partial</code> object references the <code>Function</code> to be called and a list
 of arguments to give it when the call happens. Below is the definition
 of <code>Partial</code>. Note that it also contains a possible closure environment.
@@ -301,14 +300,16 @@ object, once created, is immutable.</p>
 <p>Closures and partial applications have, at an abstract level, something in
 common: they both reference values that the function will need when it is
 finally called and need to carry these references around with them.</p>
-<p>We can extend the <code>Partial</code> definition with a closure environment so that we
-can use the same object type everywhere to represent a function pointer,
-applied arguments and closure environment as needed. This will maximize
-flexibility and simplicity in our language and VM design.</p>
+<p>It's possible, of course, to have a partially applied closure. We can extend the
+<code>Partial</code> definition with a closure environment so that we can use the same
+object type everywhere to represent a function pointer, applied arguments and
+closure environment as needed.</p>
+<h3><a class="header" href="#compiling-a-closure" id="compiling-a-closure">Compiling a closure</a></h3>
 <p>The compiler, because it keeps track of variable names and scopes, knows when a
 <code>Function</code> references nonlocal variables. When such a function is going to be
 referenced to be called next or at some later time, the compiler emits a
 <code>MakeClosure</code> instruction.</p>
+<h3><a class="header" href="#referencing-the-stack-with-upvalues" id="referencing-the-stack-with-upvalues">Referencing the stack with upvalues</a></h3>
 <p>The VM, when it executes <code>MakeClosure</code>, creates a new <code>Partial</code> object.  It
 then iterates over the list of nonlocal references and allocates an <code>Upvalue</code>
 object for each, which are added to the <code>env</code> member on the <code>Partial</code> object.
@@ -336,6 +337,16 @@ copies the variable from the register stack to the <code>value</code> member of 
 reads or writes to this variable, the value on the <code>Upvalue</code> object is modified
 rather than the location on the register stack.</p>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
+<pre><code class="language-rust ignore">pub struct Thread {
+    ...
+    globals: CellPtr&lt;Dict&gt;,
+    ...
+}
+</code></pre>
+<p>The outermost scope of a program's values and functions are the global values.
+We can manage these with an instance of a <code>Dict</code>. While a <code>Dict</code> can use any
+hashable value as a key, internally the VM will only allow <code>Symbol</code>s to be
+keys. That is, globals must be named objects.</p>
 <h2><a class="header" href="#tying-it-all-together" id="tying-it-all-together">Tying it all together</a></h2>
 <include VM code snippets here>
 
