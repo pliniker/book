@@ -148,9 +148,10 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#virtual-machine-implementation" id="virtual-machine-implementation">Virtual Machine: Implementation</a></h1>
-<p>This chapter will explain some of the more important implementation details
-of our virtual machine.</p>
-<p>We'll begin by laying out a struct for a single thread of execution:</p>
+<p>In this chapter we'll dive into some of the more interesting and important
+implementation details of our virtual machine.</p>
+<p>To begin with, we'll lay out a struct for a single thread of execution. This
+struct should contain everything needed to execute the output of the compiler.</p>
 <pre><code class="language-rust ignore">pub struct Thread {
     /// An array of CallFrames
     frames: CellPtr&lt;CallFrameList&gt;,
@@ -167,13 +168,24 @@ of our virtual machine.</p>
     instr: CellPtr&lt;InstructionStream&gt;,
 }
 </code></pre>
-<p>This struct contains every data structure needed to represent global values,
-stack values, closed-over stack values, function call frames and instructions
-to execute.</p>
-<p>Let's look at each one of these.</p>
+<p>Here we see every data structure needed to represent:</p>
+<ul>
+<li>function call frames</li>
+<li>stack values</li>
+<li>closed-over stack values (Upvalues)</li>
+<li>global values</li>
+<li>bytecode to execute</li>
+</ul>
 <h2><a class="header" href="#the-stack" id="the-stack">The stack</a></h2>
-<p>The stack is separated into a stack of <code>CallFrame</code> instances and a register
-stack.</p>
+<p>While some runtimes and compilers, particularly low-level languages, have a
+single stack that represents both function call information and local variables,
+our high-level runtime splits the stack into:</p>
+<ol>
+<li>a stack of <code>CallFrame</code> objects containing function call and return
+information</li>
+<li>and a register stack for local variables.</li>
+</ol>
+<p>Let's look at each in turn.</p>
 <h3><a class="header" href="#the-register-stack" id="the-register-stack">The register stack</a></h3>
 <p>In our <code>Thread</code> struct, the register stack is represented by the two members:</p>
 <pre><code class="language-rust ignore">pub struct Thread {
@@ -187,8 +199,11 @@ stack.</p>
 therefore an array of tagged pointers. Thus, the register stack is a homogenous
 array of word sized values that are pointers to objects on the heap or values
 that can be inlined in the tagged pointer word.</p>
+<p>We also have a <code>stack_base</code> variable to quickly retrieve the offset into <code>stack</code>
+that indicates the beginning of the window of 256 registers that the current
+function has for it's local variables.</p>
 <h3><a class="header" href="#the-call-frame-stack" id="the-call-frame-stack">The call frame stack</a></h3>
-<p>In our <code>Thread</code> struct, the call frame stack is represented by the member:</p>
+<p>In our <code>Thread</code> struct, the call frame stack is represented by the members:</p>
 <pre><code class="language-rust ignore">pub struct Thread {
     ...
     frames: CellPtr&lt;CallFrameList&gt;,
@@ -196,10 +211,7 @@ that can be inlined in the tagged pointer word.</p>
     ...
 }
 </code></pre>
-<p>Where <code>CallFrameList</code> is defined as</p>
-<pre><code class="language-rust ignore">pub type CallFrameList = Array&lt;CallFrame&gt;;
-</code></pre>
-<p>and a <code>CallFrame</code> struct is defined as:</p>
+<p>A <code>CallFrame</code> and an array of them are defined as:</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct CallFrame {
     /// Pointer to the Function being executed
@@ -209,19 +221,22 @@ pub struct CallFrame {
     /// Stack base - index into the register stack where register window for this function begins
     base: ArraySize,
 }
+
+pub type CallFrameList = Array&lt;CallFrame&gt;;
 </code></pre>
 <p>A <code>CallFrame</code> contains all the information needed to resume a function when
 a nested function call returns:</p>
 <ul>
-<li>the <code>Function</code> object, which references the <code>Bytecode</code> comprising the
+<li>a <code>Function</code> object, which references the <code>Bytecode</code> comprising the
 function</li>
 <li>the return instruction pointer</li>
 <li>the stack base index for the function's stack register window</li>
 </ul>
 <p>On every function call, a <code>CallFrame</code> instance is pushed on to the <code>Thread</code>'s
-frames list.</p>
-<p>Directly related to the call frame stack is the current instruction pointer.
-This is the <code>Thread</code> member <code>instr: CellPtr&lt;InstructionStream&gt;</code>,</p>
+<code>frames</code> stack and on every return from a function, the top <code>CallFrame</code> is
+popped off the stack.</p>
+<p>Additionally, we keep a pointer to the current executing function (the function
+represented by the top <code>CallFrame</code>) with the member <code>instr: CellPtr&lt;InstructionStream&gt;</code>.</p>
 <p>For a review of the definition of <code>InstructionStream</code> see the
 <a href="./chapter-interp-bytecode.html">bytecode</a> chapter where we defined it as
 a pair of values - a <code>ByteCode</code> reference and a pointer to the next <code>Opcode</code>
@@ -256,25 +271,26 @@ definition that is compiled.</p>
 <p>A <code>Function</code> object is a simple collection of values, some of which may be
 <code>nil</code>. Any member represented by a <code>TaggedCellPtr</code> may, of course, contain
 a <code>nil</code> value.</p>
-<p>Thus the function may be anonymous, represented by a <code>nil</code> name member value.
-While the function name is optional, the parameter names are always included.
-While they do not need to be known in order to execute the function, they are
-useful for representing the function if the programmer needs to introspect a
-function object.</p>
-<p>Members that are required to execute the function are the arity, the <code>ByteCode</code>
-and any nonlocal references.</p>
+<p>Thus the function may be anonymous, represented by a <code>nil</code> name value.</p>
+<p>While the function name is optional, the parameter names are always included.
+Though they do not need to be known in order to execute the function, they are
+useful for representing the function in string form if the programmer needs to
+introspect a function object.</p>
+<p>Members that are <em>required</em> to execute the function are the arity, the
+<code>ByteCode</code> and any nonlocal references.</p>
 <p>Nonlocal references are an optional list of <code>(relative_stack_frame, register)</code>
-values provided by the compiler that are needed to locate nonlocal variables on
-the register stack. These are, of course, a key component of implementing
-closures. We'll talk about closures shortly, but before we do, we'll extend
-<code>Function</code>s with partial application of arguments.</p>
+tuples, provided by the compiler, that are needed to locate nonlocal variables
+on the register stack. These are, of course, a key component of implementing
+closures.</p>
+<p>We'll talk about closures shortly, but before we do, we'll extend <code>Function</code>s
+with partial application of arguments.</p>
 <h2><a class="header" href="#partial-functions" id="partial-functions">Partial functions</a></h2>
 <p>A partial function application takes a subset of the arguments required to
 make a function call. These arguments must be stored for later.</p>
 <p>Thus, a <code>Partial</code> object references the <code>Function</code> to be called and a list
-of arguments to give it when the call happens. Below is the definition
-of <code>Partial</code>. Note that it also contains a possible closure environment.
-We'll discuss that in the next section.</p>
+of arguments to give it when the call is finally executed.</p>
+<p>Below is the definition of <code>Partial</code>. Note that it also contains a possible
+closure environment. We'll discuss that in the next section.</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
 pub struct Partial {
     /// Remaining number of arguments required to activate the function
@@ -294,21 +310,20 @@ many have been given. These are provided directly in this struct rather than
 requiring dereferencing the <code>arity</code> on the <code>Function</code> object and the length of
 the <code>args</code> list. This is for convenience and performance.</p>
 <p>Each time more arguments are added to a <code>Partial</code>, a new <code>Partial</code> instance must
-be allocated and the existing arguments copied over. Essentially, a <code>Partial</code>
-object, once created, is immutable.</p>
+be allocated and the existing arguments copied over. A <code>Partial</code> object, once
+created, is immutable.</p>
 <h2><a class="header" href="#closures" id="closures">Closures</a></h2>
 <p>Closures and partial applications have, at an abstract level, something in
 common: they both reference values that the function will need when it is
-finally called and need to carry these references around with them.</p>
-<p>It's possible, of course, to have a partially applied closure. We can extend the
-<code>Partial</code> definition with a closure environment so that we can use the same
-object type everywhere to represent a function pointer, applied arguments and
-closure environment as needed.</p>
+finally called.</p>
+<p>It's also possible, of course, to have a partially applied closure.</p>
+<p>We can extend the <code>Partial</code> definition with a closure environment so that we can
+use the same object type everywhere to represent a function pointer, applied
+arguments and closure environment as needed.</p>
 <h3><a class="header" href="#compiling-a-closure" id="compiling-a-closure">Compiling a closure</a></h3>
 <p>The compiler, because it keeps track of variable names and scopes, knows when a
-<code>Function</code> references nonlocal variables. When such a function is going to be
-referenced to be called next or at some later time, the compiler emits a
-<code>MakeClosure</code> instruction.</p>
+<code>Function</code> references nonlocal variables. After such a function is defined, the
+compiler emits a <code>MakeClosure</code> instruction.</p>
 <h3><a class="header" href="#referencing-the-stack-with-upvalues" id="referencing-the-stack-with-upvalues">Referencing the stack with upvalues</a></h3>
 <p>The VM, when it executes <code>MakeClosure</code>, creates a new <code>Partial</code> object.  It
 then iterates over the list of nonlocal references and allocates an <code>Upvalue</code>
@@ -323,19 +338,20 @@ pub struct Upvalue {
     location: ArraySize,
 }
 </code></pre>
-<p>An <code>Upvalue</code> is an object that references a register stack location (that is
-the <code>location</code> member.) The initial value of <code>closed</code> is <code>false</code>.  In this
-state, the location on the stack that contains the variable <em>must</em> be a valid
-location. That is, the stack can not have been unwound yet.  If the closure is
-called, <code>Upvalue</code>s in this state are simply an indirection between the function
-and the variable on the register stack.</p>
+<p>An <code>Upvalue</code> is an object that references an absolute register stack location
+(that is the <code>location</code> member.)</p>
+<p>The initial value of <code>closed</code> is <code>false</code>. In this state, the location on the
+stack that contains the variable <em>must</em> be a valid location. That is, the stack
+can not have been unwound yet. If the closure is called, <code>Upvalue</code>s in this
+state are simply an indirection between the function and the variable on the
+register stack.</p>
 <p>The compiler is able to keep track of variables and whether they are closed
-over. It emits bytecode instructions to close <code>Upvalue</code> objects when
-closed-over variables go out of scope. This instruction, <code>CloseUpvalues</code>,
-copies the variable from the register stack to the <code>value</code> member of the
-<code>Upvalue</code> object and sets <code>closed</code> to <code>true</code>. From now on, when the closure
-reads or writes to this variable, the value on the <code>Upvalue</code> object is modified
-rather than the location on the register stack.</p>
+over. It emits bytecode instructions to close <code>Upvalue</code> objects when variables
+on the stack go out of scope.</p>
+<p>This instruction, <code>CloseUpvalues</code>, copies the variable from the register stack
+to the <code>value</code> member of the <code>Upvalue</code> object and sets <code>closed</code> to <code>true</code>.</p>
+<p>From then on, when the closure reads or writes to this variable, the value on
+the <code>Upvalue</code> object is modified rather than the location on the register stack.</p>
 <h2><a class="header" href="#global-values" id="global-values">Global values</a></h2>
 <pre><code class="language-rust ignore">pub struct Thread {
     ...
