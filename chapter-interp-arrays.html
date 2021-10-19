@@ -270,7 +270,7 @@ pointer to a memory location, if the index is within bounds:</p>
                 .data
                 .get()
                 .as_ptr()
-                .ok_or(RuntimeError::new(ErrorKind::BoundsError))?;
+                .ok_or_else(|| RuntimeError::new(ErrorKind::BoundsError))?;
 
             let dest_ptr = unsafe { ptr.offset(index as isize) as *mut T };
 
@@ -445,11 +445,11 @@ location using the internal <code>Array&lt;T&gt;::write()</code> method detailed
         mem: &amp;'guard MutatorView,
         item: TaggedScopedPtr&lt;'guard&gt;,
     ) -&gt; Result&lt;(), RuntimeError&gt; {
-        Ok(StackContainer::&lt;TaggedCellPtr&gt;::push(
+        StackContainer::&lt;TaggedCellPtr&gt;::push(
             self,
             mem,
             TaggedCellPtr::new_with(item),
-        )?)
+        )
     }
 }
 </code></pre>
