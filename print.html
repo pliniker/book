@@ -2913,11 +2913,7 @@ location using the internal <code>Array&lt;T&gt;::write()</code> method detailed
         mem: &amp;'guard MutatorView,
         item: TaggedScopedPtr&lt;'guard&gt;,
     ) -&gt; Result&lt;(), RuntimeError&gt; {
-        StackContainer::&lt;TaggedCellPtr&gt;::push(
-            self,
-            mem,
-            TaggedCellPtr::new_with(item),
-        )
+        StackContainer::&lt;TaggedCellPtr&gt;::push(self, mem, TaggedCellPtr::new_with(item))
     }
 }
 </code></pre>
