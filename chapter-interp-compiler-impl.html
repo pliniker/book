@@ -148,13 +148,67 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#compiler-implementation" id="compiler-implementation">Compiler: Implementation</a></h1>
-<p>Before we get into eval and apply we need to consider how we will support lexical
-scoping with data structures for keeping track of:</p>
+<p>Before we get into eval and apply let's consider how we will support variables
+and lexical scoping.</p>
+<h2><a class="header" href="#variables-and-scopes" id="variables-and-scopes">Variables and Scopes</a></h2>
+<p>As seen in the previous chapter, variable accesses come in three types, as far
+as the compiler and VM are concerned: local, nonlocal and global. Each access
+uses a different bytecode operation, and so the compiler must be able to
+determine what operations to emit at compile time.</p>
+<p>Given that we have named function parameters and <code>let</code>, we have syntax for
+mandatory variable declaration within function definitions. This means that we
+can easily keep track of whether a variable reference is local, nonlocal or
+global.</p>
+<p>If a variable wasn't declared as a parameter or in a <code>let</code> block, it
+must be global. Global variables are accessed dynamically by name.</p>
+<p>As far as local and nonlocal variables are concerned, the VM does not care
+about or consider their names. At the VM level, local and nonlocal variables
+are specific registers. That is, each function's local variables are mapped to
+a register numbered between 2 and 255. The compiler must generate the mapping
+from variable names to register numbers.</p>
+<p>For generating and maintaining mappings, we need data structures for keeping
+track of:</p>
 <ul>
-<li>function local variables</li>
+<li>function local variables and their mappings to register numbers</li>
+<li>references to nonlocal variables and their relative stack offsets</li>
 <li>nested scopes within functions</li>
-<li>references to nonlocal variables in outer function definitions</li>
 </ul>
+<h3><a class="header" href="#named-variables" id="named-variables">Named variables</a></h3>
+<p>Our first data structure will define a register based binding:</p>
+<pre><code class="language-rust ignore">/// A variable is a named register. It has compile time metadata about how it is used by closures.
+struct Variable {
+    register: Register,
+    closed_over: Cell&lt;bool&gt;,
+}
+</code></pre>
+<p>For every named variable - parameters and <code>let</code> definitions, a <code>Variable</code>
+instance is created.</p>
+<p>The member <code>closed_over</code> defaults to <code>false</code>. If the compiler detects that the
+variable must escape the stack as part of a closure, this flag will be flipped
+to <code>true</code>.</p>
+<h3><a class="header" href="#retrieving-named-variables" id="retrieving-named-variables">Retrieving named variables</a></h3>
+<p>Whenever a variable is referenced in source code, the mapping to it's register
+must be looked up. The result of a lookup is a <code>Binding</code> instance:</p>
+<pre><code class="language-rust ignore">/// A binding can be either local or via an upvalue depending on how a closure refers to it.
+#[derive(Copy, Clone, PartialEq)]
+enum Binding {
+    /// An local variable is local to a function scope
+    Local(Register),
+    /// An Upvalue is an indirection for pointing at a nonlocal variable on the stack
+    Upvalue(UpvalueId),
+}
+</code></pre>
+<p>The lookup process checks the local function scopes first.</p>
+<p>If the variable is found to be declared there, the <code>Local</code> enum variant is
+returned. In terms of bytecode, this will translate to a direct register
+reference.</p>
+<p>Next, any outer function scopes are searched. If the variable is found in any
+outer scope, an <code>Upvalue</code> variant is returned. The compiler will emit instructions
+to copy the value refered to by the upvalue into a function-local temporary
+register.</p>
+<p>If the lookup for the variable fails, a global lookup instruction is emitted
+that will copy the result of the lookup into a function-local temporary
+register.</p>
 
                     </main>
 
