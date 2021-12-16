@@ -4138,8 +4138,8 @@ struct Variable {
     closed_over: Cell&lt;bool&gt;,
 }
 </code></pre>
-<p>For every named variable - parameters and <code>let</code> definitions, a <code>Variable</code>
-instance is created.</p>
+<p>For every named, non-global variable (parameters and <code>let</code> definitions) a
+<code>Variable</code> instance is created.</p>
 <p>The member <code>closed_over</code> defaults to <code>false</code>. If the compiler detects that the
 variable must escape the stack as part of a closure, this flag will be flipped
 to <code>true</code>.</p>
@@ -4163,9 +4163,56 @@ reference.</p>
 outer scope, an <code>Upvalue</code> variant is returned. The compiler will emit instructions
 to copy the value refered to by the upvalue into a function-local temporary
 register.</p>
-<p>If the lookup for the variable fails, a global lookup instruction is emitted
-that will copy the result of the lookup into a function-local temporary
+<p>If the lookup for the variable returns nothing, a global lookup instruction is
+emitted that will copy the result of the lookup into a function-local temporary
 register.</p>
+<h3><a class="header" href="#scope-structure" id="scope-structure">Scope structure</a></h3>
+<p>The data structures that manage nesting of scopes and looking up a variable by
+name are defined below.</p>
+<pre><code class="language-rust ignore">/// A Scope contains a set of local variable to register bindings
+struct Scope {
+    /// symbol -&gt; variable mapping
+    bindings: HashMap&lt;String, Variable&gt;,
+}
+
+/// A nonlocal reference will turn in to an Upvalue at VM runtime.
+/// This struct stores the non-zero frame offset and register values of a parent function call
+/// frame where a binding will be located.
+struct Nonlocal {
+    upvalue_id: u8,
+    frame_offset: u8,
+    frame_register: u8,
+}
+
+/// A Variables instance represents a set of nested variable binding scopes for a single function
+/// definition.
+struct Variables&lt;'parent&gt; {
+    /// The parent function's variables.
+    parent: Option&lt;&amp;'parent Variables&lt;'parent&gt;&gt;,
+    /// Nested scopes, starting with parameters/arguments on the outermost scope and let scopes on
+    /// the inside.
+    scopes: Vec&lt;Scope&gt;,
+    /// Mapping of referenced nonlocal nonglobal variables and their upvalue indexes and where to
+    /// find them on the stack.
+    nonlocals: RefCell&lt;HashMap&lt;String, Nonlocal&gt;&gt;,
+    /// The next upvalue index to assign when a new nonlocal is encountered.
+    next_upvalue: Cell&lt;u8&gt;,
+}
+</code></pre>
+<p>For every function defined, the compiler maintains an instance of <code>Variables</code>.
+Each function's <code>Variables</code> can have one or more <code>Scope</code>, each of which has
+it's own set of variable name to register number mappings. Each function's
+<code>Variables</code>, when the function refers to outer-scoped variables, builds a
+mapping of nonlocal variable name to relative stack position of</p>
+<p>Under these definitions:</p>
+<ul>
+<li><code>Scope</code> manages the mapping of a variable name to the <code>Variable</code> register
+number within a single scope</li>
+<li><code>Variables</code> maintains all the nested scopes for a function and caches all the
+nonlocal references. It also keeps a reference to a parent nesting function
+if there is one, in order to handle lexically scoped lookups.</li>
+<li>A <code>Nonlocal</code> instance maintains an upvalue reference for the function</li>
+</ul>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
