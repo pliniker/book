@@ -156,14 +156,14 @@ as the compiler and VM are concerned: local, nonlocal and global. Each access
 uses a different bytecode operation, and so the compiler must be able to
 determine what operations to emit at compile time.</p>
 <p>Given that we have named function parameters and <code>let</code>, we have syntax for
-mandatory variable declaration within function definitions. This means that we
+explicit variable declaration within function definitions. This means that we
 can easily keep track of whether a variable reference is local, nonlocal or
 global.</p>
 <p>If a variable wasn't declared as a parameter or in a <code>let</code> block, it
 must be global. Global variables are accessed dynamically by name.</p>
 <p>As far as local and nonlocal variables are concerned, the VM does not care
 about or consider their names. At the VM level, local and nonlocal variables
-are specific registers. That is, each function's local variables are mapped to
+are numbered registers. That is, each function's local variables are mapped to
 a register numbered between 2 and 255. The compiler must generate the mapping
 from variable names to register numbers.</p>
 <p>For generating and maintaining mappings, we need data structures for keeping
@@ -174,44 +174,21 @@ track of:</p>
 <li>nested scopes within functions</li>
 </ul>
 <h3><a class="header" href="#named-variables" id="named-variables">Named variables</a></h3>
-<p>Our first data structure will define a register based binding:</p>
+<p>Our first data structure will define a register based variable:</p>
 <pre><code class="language-rust ignore">/// A variable is a named register. It has compile time metadata about how it is used by closures.
 struct Variable {
     register: Register,
     closed_over: Cell&lt;bool&gt;,
 }
 </code></pre>
-<p>For every named, non-global variable (parameters and <code>let</code> definitions) a
-<code>Variable</code> instance is created.</p>
+<p>For every named, non-global variable (created by defining parameters and <code>let</code>
+blocks) a <code>Variable</code> instance is created in the compiler.</p>
 <p>The member <code>closed_over</code> defaults to <code>false</code>. If the compiler detects that the
 variable must escape the stack as part of a closure, this flag will be flipped
 to <code>true</code>.</p>
-<h3><a class="header" href="#retrieving-named-variables" id="retrieving-named-variables">Retrieving named variables</a></h3>
-<p>Whenever a variable is referenced in source code, the mapping to it's register
-must be looked up. The result of a lookup is a <code>Binding</code> instance:</p>
-<pre><code class="language-rust ignore">/// A binding can be either local or via an upvalue depending on how a closure refers to it.
-#[derive(Copy, Clone, PartialEq)]
-enum Binding {
-    /// An local variable is local to a function scope
-    Local(Register),
-    /// An Upvalue is an indirection for pointing at a nonlocal variable on the stack
-    Upvalue(UpvalueId),
-}
-</code></pre>
-<p>The lookup process checks the local function scopes first.</p>
-<p>If the variable is found to be declared there, the <code>Local</code> enum variant is
-returned. In terms of bytecode, this will translate to a direct register
-reference.</p>
-<p>Next, any outer function scopes are searched. If the variable is found in any
-outer scope, an <code>Upvalue</code> variant is returned. The compiler will emit instructions
-to copy the value refered to by the upvalue into a function-local temporary
-register.</p>
-<p>If the lookup for the variable returns nothing, a global lookup instruction is
-emitted that will copy the result of the lookup into a function-local temporary
-register.</p>
 <h3><a class="header" href="#scope-structure" id="scope-structure">Scope structure</a></h3>
-<p>The data structures that manage nesting of scopes and looking up a variable by
-name are defined here.</p>
+<p>The data structures that manage nesting of scopes and looking up a <code>Variable</code>
+by name are defined here.</p>
 <pre><code class="language-rust ignore">/// A Scope contains a set of local variable to register bindings
 struct Scope {
     /// symbol -&gt; variable mapping
@@ -242,24 +219,57 @@ struct Variables&lt;'parent&gt; {
     next_upvalue: Cell&lt;u8&gt;,
 }
 </code></pre>
-<p>For every function defined, the compiler maintains an instance of <code>Variables</code>.
-Each function's <code>Variables</code> can have one or more <code>Scope</code>, each of which has
-it's own set of variable name to register number mappings.</p>
-<p>The outermost <code>Scope</code> contains the mapping function parameters to registers.</p>
-<p>A nested function's <code>Variables</code>, when the function refers to nesting function
-variables, builds a mapping of nonlocal variable name to relative stack
-position of that variable. This is a <code>NonLocal</code> - a relative stack frame offset
-and the register number within that stack frame of the variable.</p>
+<p>For every function defined, the compiler maintains an instance of the type
+<code>Variables</code>.</p>
+<p>Each function's <code>Variables</code> has a stack of <code>Scope</code> instances, each of which has
+it's own set of name to <code>Variable</code> register number mappings.  The outermost
+<code>Scope</code> contains the mapping of function parameters to registers.</p>
+<p>A nested function's <code>Variables</code>, when the function refers to a nesting
+function's variable, builds a mapping of nonlocal variable name to relative
+stack position of that variable. This is a <code>NonLocal</code> - a relative stack frame
+offset and the register number within that stack frame of the variable.</p>
 <p>In summary, under these definitions:</p>
 <ul>
 <li><code>Scope</code> manages the mapping of a variable name to the <code>Variable</code> register
 number within a single scope</li>
-<li><code>Variables</code> maintains all the nested scopes for a function and caches all the
-nonlocal references. It also keeps a reference to a parent nesting function
-if there is one, in order to handle lexically scoped lookups.</li>
-<li>A <code>Nonlocal</code> instance caches a relative stack location of a nonlocal variable
-for compiling upvalues</li>
+<li>A <code>Nonlocal</code> instance references a relative stack location of a nonlocal
+variable for compiling upvalues</li>
+<li><code>Variables</code> maintains all the nested scopes for a function during compilation
+and caches all the nonlocal references. It also keeps a reference to a parent
+nesting function if there is one, in order to handle lexically scoped
+lookups.</li>
 </ul>
+<h3><a class="header" href="#retrieving-named-variables" id="retrieving-named-variables">Retrieving named variables</a></h3>
+<p>Whenever a variable is referenced in source code, the mapping to it's register
+must be looked up. The result of a lookup is a <code>Binding</code> instance:</p>
+<pre><code class="language-rust ignore">/// A binding can be either local or via an upvalue depending on how a closure refers to it.
+#[derive(Copy, Clone, PartialEq)]
+enum Binding {
+    /// An local variable is local to a function scope
+    Local(Register),
+    /// An Upvalue is an indirection for pointing at a nonlocal variable on the stack
+    Upvalue(UpvalueId),
+}
+</code></pre>
+<p>The lookup process checks the local function scopes first.</p>
+<p>If the variable is found to be declared there, the <code>Local</code> enum variant is
+returned. In terms of bytecode, this will translate to a direct register
+reference.</p>
+<p>Next, any outer function scopes are searched. If the variable is found in any
+outer scope, an <code>Upvalue</code> variant is returned. The compiler will emit instructions
+to copy the value refered to by the upvalue into a function-local temporary
+register.</p>
+<p>If the lookup for the variable returns nothing, a global lookup instruction is
+emitted that will, if the name exists as a globally bound value, copy the
+result of the lookup into a function-local temporary register.</p>
+<h2><a class="header" href="#evalapply" id="evalapply">Eval/apply</a></h2>
+<p>Recall:</p>
+<p><em>Eval looks at the given node and attempts to generate an instruction
+for it that would resolve the node to a value - that is, evaluate it.</em></p>
+<p>while:</p>
+<p><em>Apply takes a function name and a list of arguments. First it recurses into
+eval for each argument expression, then generates instructions to call the
+function with the argument results.</em></p>
 
                     </main>
 
