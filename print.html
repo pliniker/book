@@ -4117,7 +4117,7 @@ explicit variable declaration within function definitions. This means that we
 can easily keep track of whether a variable reference is local, nonlocal or
 global.</p>
 <p>If a variable wasn't declared as a parameter or in a <code>let</code> block, it
-must be global. Global variables are accessed dynamically by name.</p>
+must be global and global variables are accessed dynamically by name.</p>
 <p>As far as local and nonlocal variables are concerned, the VM does not care
 about or consider their names. At the VM level, local and nonlocal variables
 are numbered registers. That is, each function's local variables are mapped to
@@ -4138,11 +4138,11 @@ struct Variable {
     closed_over: Cell&lt;bool&gt;,
 }
 </code></pre>
-<p>For every named, non-global variable (created by defining parameters and <code>let</code>
-blocks) a <code>Variable</code> instance is created in the compiler.</p>
+<p>For every named, non-global variable (created by defining function parameters
+and <code>let</code> blocks) a <code>Variable</code> instance is created in the compiler.</p>
 <p>The member <code>closed_over</code> defaults to <code>false</code>. If the compiler detects that the
 variable must escape the stack as part of a closure, this flag will be flipped
-to <code>true</code>.</p>
+to <code>true</code> (it cannot be set back to <code>false</code>.)</p>
 <h3><a class="header" href="#scope-structure" id="scope-structure">Scope structure</a></h3>
 <p>The data structures that manage nesting of scopes and looking up a <code>Variable</code>
 by name are defined here.</p>
@@ -4187,10 +4187,10 @@ stack position of that variable. This is a <code>NonLocal</code> - a relative st
 offset and the register number within that stack frame of the variable.</p>
 <p>In summary, under these definitions:</p>
 <ul>
+<li>A <code>Nonlocal</code> instance caches a relative stack location of a nonlocal variable
+for compiling upvalues</li>
 <li><code>Scope</code> manages the mapping of a variable name to the <code>Variable</code> register
 number within a single scope</li>
-<li>A <code>Nonlocal</code> instance references a relative stack location of a nonlocal
-variable for compiling upvalues</li>
 <li><code>Variables</code> maintains all the nested scopes for a function during compilation
 and caches all the nonlocal references. It also keeps a reference to a parent
 nesting function if there is one, in order to handle lexically scoped
@@ -4198,7 +4198,7 @@ lookups.</li>
 </ul>
 <h3><a class="header" href="#retrieving-named-variables" id="retrieving-named-variables">Retrieving named variables</a></h3>
 <p>Whenever a variable is referenced in source code, the mapping to it's register
-must be looked up. The result of a lookup is a <code>Binding</code> instance:</p>
+must be looked up. The result of a lookup is <code>Option&lt;Binding&gt;</code>.</p>
 <pre><code class="language-rust ignore">/// A binding can be either local or via an upvalue depending on how a closure refers to it.
 #[derive(Copy, Clone, PartialEq)]
 enum Binding {
@@ -4209,25 +4209,79 @@ enum Binding {
 }
 </code></pre>
 <p>The lookup process checks the local function scopes first.</p>
-<p>If the variable is found to be declared there, the <code>Local</code> enum variant is
+<p>If the variable is found to be declared there, <code>Some(Local)</code> enum variant is
 returned. In terms of bytecode, this will translate to a direct register
 reference.</p>
 <p>Next, any outer function scopes are searched. If the variable is found in any
-outer scope, an <code>Upvalue</code> variant is returned. The compiler will emit instructions
-to copy the value refered to by the upvalue into a function-local temporary
-register.</p>
-<p>If the lookup for the variable returns nothing, a global lookup instruction is
+outer scope, <code>Some(Upvalue)</code> variant is returned. The compiler will emit
+instructions to copy the value refered to by the upvalue into a function-local
+temporary register.</p>
+<p>If the lookup for the variable returns <code>None</code>, a global lookup instruction is
 emitted that will, if the name exists as a globally bound value, copy the
 result of the lookup into a function-local temporary register.</p>
 <h2><a class="header" href="#evalapply-1" id="evalapply-1">Eval/apply</a></h2>
-<p>Recall that:</p>
-<p><em>Eval looks at the given node and attempts to generate an instruction for it
+<p>Now we can explore the recursive eval/apply AST traversal process. Recall that:</p>
+<p><em>Eval looks at the given AST node and attempts to generate an instruction for it
 that would resolve the node to a value - that is, evaluate it;</em></p>
-<p>while:</p>
+<p>If <em>eval</em> cannot immediately retrieve a value for a node, the node is likely a
+function call that must be recursed into with <em>apply</em>.</p>
+<p>Meanwhile,</p>
 <p><em>apply takes a function name and a list of arguments. First it recurses into
 eval for each argument expression, then generates instructions to call the
 function with the argument results.</em></p>
+<h3><a class="header" href="#eval" id="eval">Eval</a></h3>
 <p>Let's look at some examples of eval.</p>
+<pre><code class="language-rust ignore">    fn compile_eval&lt;'guard&gt;(
+        &amp;mut self,
+        mem: &amp;'guard MutatorView,
+        ast_node: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;Register, RuntimeError&gt; {
+        match *ast_node {
+            Value::Pair(p) =&gt; self.compile_apply(mem, p.first.get(mem), p.second.get(mem)),
+            Value::Symbol(s) =&gt; {
+                match s.as_str(mem) {
+                    &quot;nil&quot; =&gt; {
+                        let dest = self.acquire_reg();
+                        self.push(mem, Opcode::LoadNil { dest })?;
+                        Ok(dest)
+                    }
+
+                    &quot;true&quot; =&gt; self.push_load_literal(mem, mem.lookup_sym(&quot;true&quot;)),
+
+                    // Search scopes for a binding; if none do a global lookup
+                    _ =&gt; {
+                        match self.vars.lookup_binding(ast_node)? {
+                            Some(Binding::Local(register)) =&gt; Ok(register),
+
+                            Some(Binding::Upvalue(upvalue_id)) =&gt; {
+                                // Retrieve the value via Upvalue indirection
+                                let dest = self.acquire_reg();
+                                self.push(
+                                    mem,
+                                    Opcode::GetUpvalue {
+                                        dest,
+                                        src: upvalue_id,
+                                    },
+                                )?;
+                                Ok(dest)
+                            }
+
+                            None =&gt; {
+                                // Otherwise do a late-binding global lookup
+                                let name = self.push_load_literal(mem, ast_node)?;
+                                let dest = name; // reuse the register
+                                self.push(mem, Opcode::LoadGlobal { dest, name })?;
+                                Ok(dest)
+                            }
+                        }
+                    }
+                }
+            }
+
+            _ =&gt; self.push_load_literal(mem, ast_node),
+        }
+    }
+</code></pre>
 <pre><code class="language-rust ignore">        match *ast_node {
             ...
 
