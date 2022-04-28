@@ -4217,8 +4217,22 @@ outer scope, <code>Some(Upvalue)</code> variant is returned. The compiler will e
 instructions to copy the value refered to by the upvalue into a function-local
 temporary register.</p>
 <p>If the lookup for the variable returns <code>None</code>, a global lookup instruction is
-emitted that will, if the name exists as a globally bound value, copy the
-result of the lookup into a function-local temporary register.</p>
+emitted that will dynamically look up the variable name in the global namespace
+and copy the result into a function-local temporary register or raise an error
+if the binding does not exist.</p>
+<h3><a class="header" href="#a-function-compiler-data-structure" id="a-function-compiler-data-structure">A function compiler data structure</a></h3>
+<pre><code class="language-rust ignore">struct Compiler&lt;'parent&gt; {
+    bytecode: CellPtr&lt;ByteCode&gt;,
+    /// Next available register slot.
+    next_reg: Register,
+    /// Optional function name
+    name: Option&lt;String&gt;,
+    /// Function-local nested scopes bindings list (including parameters at outer level)
+    vars: Variables&lt;'parent&gt;,
+}
+</code></pre>
+<h3><a class="header" href="#evaluation" id="evaluation">Evaluation</a></h3>
+<p>What we've described above is a large part of <em>eval</em></p>
 <h2><a class="header" href="#evalapply-1" id="evalapply-1">Eval/apply</a></h2>
 <p>Now we can explore the recursive eval/apply AST traversal process. Recall that:</p>
 <p><em>Eval looks at the given AST node and attempts to generate an instruction for it
@@ -4229,8 +4243,6 @@ function call that must be recursed into with <em>apply</em>.</p>
 <p><em>apply takes a function name and a list of arguments. First it recurses into
 eval for each argument expression, then generates instructions to call the
 function with the argument results.</em></p>
-<h3><a class="header" href="#eval" id="eval">Eval</a></h3>
-<p>Let's look at some examples of eval.</p>
 <pre><code class="language-rust ignore">    fn compile_eval&lt;'guard&gt;(
         &amp;mut self,
         mem: &amp;'guard MutatorView,
