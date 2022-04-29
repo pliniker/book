@@ -263,7 +263,10 @@ temporary register.</p>
 emitted that will dynamically look up the variable name in the global namespace
 and copy the result into a function-local temporary register or raise an error
 if the binding does not exist.</p>
-<h3><a class="header" href="#a-function-compiler-data-structure" id="a-function-compiler-data-structure">A function compiler data structure</a></h3>
+<h2><a class="header" href="#evaluation" id="evaluation">Evaluation</a></h2>
+<p>We've just largely described <em>eval</em>. Let's finish the job.</p>
+<p>To put <em>eval</em> in a code context, here is the definition of a function
+compilation data structure:</p>
 <pre><code class="language-rust ignore">struct Compiler&lt;'parent&gt; {
     bytecode: CellPtr&lt;ByteCode&gt;,
     /// Next available register slot.
@@ -274,18 +277,13 @@ if the binding does not exist.</p>
     vars: Variables&lt;'parent&gt;,
 }
 </code></pre>
-<h3><a class="header" href="#evaluation" id="evaluation">Evaluation</a></h3>
-<p>What we've described above is a large part of <em>eval</em></p>
-<h2><a class="header" href="#evalapply" id="evalapply">Eval/apply</a></h2>
-<p>Now we can explore the recursive eval/apply AST traversal process. Recall that:</p>
-<p><em>Eval looks at the given AST node and attempts to generate an instruction for it
-that would resolve the node to a value - that is, evaluate it;</em></p>
-<p>If <em>eval</em> cannot immediately retrieve a value for a node, the node is likely a
-function call that must be recursed into with <em>apply</em>.</p>
-<p>Meanwhile,</p>
-<p><em>apply takes a function name and a list of arguments. First it recurses into
-eval for each argument expression, then generates instructions to call the
-function with the argument results.</em></p>
+<p>The two interesting members are</p>
+<ul>
+<li><code>bytecode</code>, which is an instance of <a href="./chapter-interp-bytecode.html">ByteCode</a></li>
+<li><code>vars</code>, an instance of <code>Variables</code> which we've described above</li>
+</ul>
+<p>The <code>Compiler</code> struct implements function <code>compile_eval()</code>, the full definition
+of which is below:</p>
 <pre><code class="language-rust ignore">    fn compile_eval&lt;'guard&gt;(
         &amp;mut self,
         mem: &amp;'guard MutatorView,
@@ -337,6 +335,18 @@ function with the argument results.</em></p>
         }
     }
 </code></pre>
+<p>The first interesting thing to note above is the return type: <code>Result&lt;Register, RuntimeError&gt;</code>. That is, a successful <em>eval</em> will return a value in a register.</p>
+<p>In the function body, the bulk of the function is devoted to retrieving values
+of variables to retrieve the value into a register. As variable names are
+represented by the <code>Symbol</code> AST type, they are expected to resolve immediately
+to a value.</p>
+<p>So what's in the evaluation of the <code>Symbol</code> AST type? Locals, nonlocals and
+globals! Plus some keywords that represent literal values.</p>
+<p>In the case of a local, the register is directly returned. In the case of a
+nonlocal, an instruction must be generated to retrievel the value from up the
+stack into a local register. And in the case of a global, an instruction must be
+generated to dynamically look up the value.</p>
+<h2><a class="header" href="#application" id="application">Application</a></h2>
 <pre><code class="language-rust ignore">        match *ast_node {
             ...
 
@@ -344,6 +354,51 @@ function with the argument results.</em></p>
 
             ...
         }
+</code></pre>
+<p>And then there's the evaluation of the <code>Pair</code> AST type. This represents,
+visually, the opening of a <code>(</code> which, of course, is a function call. <em>Eval</em>
+cannot tell us the value of a function call, the function must be applied to
+it's arguments first. So into <em>apply</em> we recurse!</p>
+<p>The first argument to <code>compile_apply()</code> is the function name <code>Symbol</code>, the
+second argument is the list of function arguments.</p>
+<p>Since we included the full <code>compile_eval()</code> function earlier, it wouldn't be
+fair to leave out the definition of <code>compile_apply()</code>. Here it is:</p>
+<pre><code class="language-rust ignore">    fn compile_apply&lt;'guard&gt;(
+        &amp;mut self,
+        mem: &amp;'guard MutatorView,
+        function: TaggedScopedPtr&lt;'guard&gt;,
+        args: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;Register, RuntimeError&gt; {
+        match *function {
+            Value::Symbol(s) =&gt; match s.as_str(mem) {
+                &quot;quote&quot; =&gt; self.push_load_literal(mem, value_from_1_pair(mem, args)?),
+                &quot;atom?&quot; =&gt; self.push_op2(mem, args, |dest, test| Opcode::IsAtom { dest, test }),
+                &quot;nil?&quot; =&gt; self.push_op2(mem, args, |dest, test| Opcode::IsNil { dest, test }),
+                &quot;car&quot; =&gt; self.push_op2(mem, args, |dest, reg| Opcode::FirstOfPair { dest, reg }),
+                &quot;cdr&quot; =&gt; self.push_op2(mem, args, |dest, reg| Opcode::SecondOfPair { dest, reg }),
+                &quot;cons&quot; =&gt; self.push_op3(mem, args, |dest, reg1, reg2| Opcode::MakePair {
+                    dest,
+                    reg1,
+                    reg2,
+                }),
+                &quot;cond&quot; =&gt; self.compile_apply_cond(mem, args),
+                &quot;is?&quot; =&gt; self.push_op3(mem, args, |dest, test1, test2| Opcode::IsIdentical {
+                    dest,
+                    test1,
+                    test2,
+                }),
+                &quot;set&quot; =&gt; self.compile_apply_assign(mem, args),
+                &quot;def&quot; =&gt; self.compile_named_function(mem, args),
+                &quot;lambda&quot; =&gt; self.compile_anonymous_function(mem, args),
+                &quot;\\&quot; =&gt; self.compile_anonymous_function(mem, args),
+                &quot;let&quot; =&gt; self.compile_apply_let(mem, args),
+                _ =&gt; self.compile_apply_call(mem, function, args),
+            },
+
+            // Here we allow the value in the function position to be evaluated dynamically
+            _ =&gt; self.compile_apply_call(mem, function, args),
+        }
+    }
 </code></pre>
 
                     </main>
