@@ -356,9 +356,9 @@ generated to dynamically look up the value.</p>
         }
 </code></pre>
 <p>And then there's the evaluation of the <code>Pair</code> AST type. This represents,
-visually, the opening of a <code>(</code> which, of course, is a function call. <em>Eval</em>
-cannot tell us the value of a function call, the function must be applied to
-it's arguments first. So into <em>apply</em> we recurse!</p>
+visually, the syntax <code>(function_name arg1 arg2 argN)</code> which is, of course, a
+function call. <em>Eval</em> cannot tell us the value of a function call, the function
+must be applied to it's arguments first. So into <em>apply</em> we recurse!</p>
 <p>The first argument to <code>compile_apply()</code> is the function name <code>Symbol</code>, the
 second argument is the list of function arguments.</p>
 <p>Since we included the full <code>compile_eval()</code> function earlier, it wouldn't be
@@ -400,6 +400,102 @@ fair to leave out the definition of <code>compile_apply()</code>. Here it is:</p
         }
     }
 </code></pre>
+<p>The <code>function</code> parameter is expected to be a <code>Symbol</code>, that is, have a <em>name</em>
+represented by a <code>Symbol</code>. Thus, the function is <code>match</code>ed on the <code>Symbol</code>.</p>
+<h3><a class="header" href="#compiling-function-compilation-nil" id="compiling-function-compilation-nil">Compiling function compilation: nil?</a></h3>
+<p>Let's follow the compilation of a simple function: <code>nil?</code>. This is where we'll
+start seeing some of the deeper details of compilation, such as register
+allocation and</p>
+<pre><code class="language-rust ignore">                ...
+                &quot;nil?&quot; =&gt; self.push_op2(mem, args, |dest, test| Opcode::IsNil { dest, test }),
+                ...
+</code></pre>
+<p>The function <code>nil?</code> takes a single argument and returns:</p>
+<ul>
+<li>the <code>Symbol</code> for <code>true</code> if the value of the argument is <code>nil</code></li>
+<li><code>nil</code> if the argument is <em>not</em> <code>nil</code>.</li>
+</ul>
+<p>In compiling this function call, a single bytecode opcode will be pushed on to
+the <code>ByteCode</code> array. This is done in the <code>Compiler::push_op2()</code> function. It is
+named <code>push_op2</code> because the opcode takes two operands: an argument register
+and a result destination register. This function is used to compile all simple
+function calls that follow the pattern of one argument, one result value. Here
+is <code>push_op2()</code>:</p>
+<pre><code class="language-rust ignore">    fn push_op2&lt;'guard, F&gt;(
+        &amp;mut self,
+        mem: &amp;'guard MutatorView,
+        params: TaggedScopedPtr&lt;'guard&gt;,
+        f: F,
+    ) -&gt; Result&lt;Register, RuntimeError&gt;
+    where
+        F: Fn(Register, Register) -&gt; Opcode,
+    {
+        let result = self.acquire_reg();
+        let reg1 = self.compile_eval(mem, value_from_1_pair(mem, params)?)?;
+        self.bytecode.get(mem).push(mem, f(result, reg1))?;
+        Ok(result)
+    }
+</code></pre>
+<p>Let's break this down, line by line:</p>
+<ol>
+<li>
+<p><code>let result = self.acquire_reg();</code></p>
+<ul>
+<li><code>self.acquire_reg()</code>: is called to get an unused register. In this case, we
+need a register to store the result value in. This register acquisition
+follows a stack approach. Registers are acquired (pushed on to the stack
+window) as new variables are declared within a scope, and popped when the
+scope is exited.</li>
+<li>The type of <code>result</code> is <code>Register</code> which is an alias for <code>u8</code> - an
+unsigned int from 0 to 255.</li>
+</ul>
+</li>
+<li>
+<p><code>let reg1 = self.compile_eval(mem, value_from_1_pair(mem, params)?)?;</code></p>
+<ul>
+<li><code>value_from_1_pair(mem, params)?</code>: inspects the argument list and returns
+the argument if there is a single one, otherwise returns an error.</li>
+<li><code>self.compile_eval(mem, &lt;arg&gt;)?</code>: recurses into the argument to compile it
+down to a something that can be applied to the function call.</li>
+<li><code>let reg1 = &lt;value&gt;;</code>: where <code>reg1</code> will be the argument register to the
+opcode.</li>
+</ul>
+</li>
+<li>
+<p><code>self.bytecode.get(mem).push(mem, f(result, reg1))?;</code></p>
+<ul>
+<li><code>f(result, reg1)</code>: calls function <code>f</code> that will return the opcode with
+operands applied in <code>ByteCode</code> format.</li>
+<li>In the case of calling <code>nil?</code>, the argument <code>f</code> is:
+<ul>
+<li><code>|dest, test| Opcode::IsNil { dest, test }</code></li>
+</ul>
+</li>
+<li><code>self.bytecode.get(mem).push(mem, &lt;opcode&gt;)?;</code>: gets the <code>ByteCode</code>
+reference and pushes the opcode on to the end of the bytecode array.</li>
+</ul>
+</li>
+<li>
+<p><code>Ok(result)</code></p>
+<ul>
+<li>the result register is returned to the <code>compile_apply()</code> function</li>
+</ul>
+</li>
+</ol>
+<p>... and <code>compile_apply()</code> itself returns the result register to <em>it's</em> caller.</p>
+<p>The pattern for compiling function application, more generally, is this:</p>
+<ul>
+<li>acquire a result register</li>
+<li>acquire any temporary intermediate result registers</li>
+<li>recurse into arguments to compile <em>them</em> first</li>
+<li>emit bytecode for the function, pushing opcodes on to the bytecode array and
+putting the final result in the result register</li>
+<li>release any intermediate registers</li>
+<li>return the result register number</li>
+</ul>
+<p>Compiling <code>nil?</code> was hopefully quite simple. Let's look at something much more
+involved, now.</p>
+<h3><a class="header" href="#compiling-function-application-what-will-it-be" id="compiling-function-application-what-will-it-be">Compiling function application: [what will it be???]</a></h3>
 
                     </main>
 
