@@ -264,9 +264,9 @@ emitted that will dynamically look up the variable name in the global namespace
 and copy the result into a function-local temporary register or raise an error
 if the binding does not exist.</p>
 <h2><a class="header" href="#evaluation" id="evaluation">Evaluation</a></h2>
-<p>We've just largely described <em>eval</em>. Let's finish the job.</p>
-<p>To put <em>eval</em> in a code context, here is the definition of a function
-compilation data structure:</p>
+<p>We've just somewhat described what happens in the lower levels of <em>eval</em>. Let's
+finish the job and put <em>eval</em> in a code context. Here is the definition of a
+function compilation data structure:</p>
 <pre><code class="language-rust ignore">struct Compiler&lt;'parent&gt; {
     bytecode: CellPtr&lt;ByteCode&gt;,
     /// Next available register slot.
@@ -280,7 +280,8 @@ compilation data structure:</p>
 <p>The two interesting members are</p>
 <ul>
 <li><code>bytecode</code>, which is an instance of <a href="./chapter-interp-bytecode.html">ByteCode</a></li>
-<li><code>vars</code>, an instance of <code>Variables</code> which we've described above</li>
+<li><code>vars</code>, an instance of <code>Variables</code> which we've described above. This instance
+will be the outermost scope of the <code>let</code> or function block being compiled.</li>
 </ul>
 <p>The <code>Compiler</code> struct implements function <code>compile_eval()</code>, the full definition
 of which is below:</p>
@@ -335,18 +336,22 @@ of which is below:</p>
         }
     }
 </code></pre>
-<p>The first interesting thing to note above is the return type: <code>Result&lt;Register, RuntimeError&gt;</code>. That is, a successful <em>eval</em> will return a value in a register.</p>
-<p>In the function body, the bulk of the function is devoted to retrieving values
-of variables to retrieve the value into a register. As variable names are
-represented by the <code>Symbol</code> AST type, they are expected to resolve immediately
-to a value.</p>
-<p>So what's in the evaluation of the <code>Symbol</code> AST type? Locals, nonlocals and
-globals! Plus some keywords that represent literal values.</p>
-<p>In the case of a local, the register is directly returned. In the case of a
-nonlocal, an instruction must be generated to retrievel the value from up the
-stack into a local register. And in the case of a global, an instruction must be
-generated to dynamically look up the value.</p>
+<p>Note that the return type is <code>Result&lt;Register, RuntimeError&gt;</code>. That is, a
+successful <em>eval</em> will return a register where the result will be stored at
+runtime.</p>
+<p>In the function body, the match branches fall into three categories:</p>
+<ul>
+<li>keywords literals (<code>nil</code>, <code>true</code>)</li>
+<li>all other literals</li>
+<li>named variables represented by <code>Symbol</code>s</li>
+</ul>
+<p>What's in the evaluation of the <code>Symbol</code> AST type? Locals, nonlocals and
+globals!</p>
+<p>We can see the generation of special opcodes for retrieving nonlocal and global
+values here, whereas a local will resolve directly to an existing register
+without the need to generate any additional opcodes.</p>
 <h2><a class="header" href="#application" id="application">Application</a></h2>
+<p>To evaluate a function call, we switch over to <em>apply</em>:</p>
 <pre><code class="language-rust ignore">        match *ast_node {
             ...
 
@@ -355,10 +360,10 @@ generated to dynamically look up the value.</p>
             ...
         }
 </code></pre>
-<p>And then there's the evaluation of the <code>Pair</code> AST type. This represents,
-visually, the syntax <code>(function_name arg1 arg2 argN)</code> which is, of course, a
-function call. <em>Eval</em> cannot tell us the value of a function call, the function
-must be applied to it's arguments first. So into <em>apply</em> we recurse!</p>
+<p>This is the evaluation of the <code>Pair</code> AST type. This represents, visually, the
+syntax <code>(function_name arg1 arg2 argN)</code> which is, of course, a function call.
+<em>Eval</em> cannot tell us the value of a function call, the function must be applied
+to it's arguments first. Into <em>apply</em> we recurse.</p>
 <p>The first argument to <code>compile_apply()</code> is the function name <code>Symbol</code>, the
 second argument is the list of function arguments.</p>
 <p>Since we included the full <code>compile_eval()</code> function earlier, it wouldn't be
