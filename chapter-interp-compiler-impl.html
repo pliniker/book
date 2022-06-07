@@ -283,8 +283,21 @@ function compilation data structure:</p>
 <li><code>vars</code>, an instance of <code>Variables</code> which we've described above. This instance
 will be the outermost scope of the <code>let</code> or function block being compiled.</li>
 </ul>
-<p>The <code>Compiler</code> struct implements function <code>compile_eval()</code>, the full definition
-of which is below:</p>
+<p>The main entrypoint to this structure is the function <code>compile_function()</code>:</p>
+<pre><code class="language-rust ignore">    fn compile_function&lt;'guard&gt;(
+        mut self,
+        mem: &amp;'guard MutatorView,
+        name: TaggedScopedPtr&lt;'guard&gt;,
+        params: &amp;[TaggedScopedPtr&lt;'guard&gt;],
+        exprs: &amp;[TaggedScopedPtr&lt;'guard&gt;],
+    ) -&gt; Result&lt;ScopedPtr&lt;'guard, Function&gt;, RuntimeError&gt; {
+        ...
+    }
+</code></pre>
+<p>This function will set up a <code>Variables</code> scope with the given parameters and call
+into function <code>compile_eval()</code> for each expression in the function. The full
+definition of <code>compile_eval()</code> is below, and we'll go into the details of
+<code>compile_function()</code> later.</p>
 <pre><code class="language-rust ignore">    fn compile_eval&lt;'guard&gt;(
         &amp;mut self,
         mem: &amp;'guard MutatorView,
@@ -407,7 +420,7 @@ fair to leave out the definition of <code>compile_apply()</code>. Here it is:</p
 </code></pre>
 <p>The <code>function</code> parameter is expected to be a <code>Symbol</code>, that is, have a <em>name</em>
 represented by a <code>Symbol</code>. Thus, the function is <code>match</code>ed on the <code>Symbol</code>.</p>
-<h3><a class="header" href="#compiling-function-compilation-nil" id="compiling-function-compilation-nil">Compiling function compilation: nil?</a></h3>
+<h3><a class="header" href="#caling-nil" id="caling-nil">Caling nil?</a></h3>
 <p>Let's follow the compilation of a simple function: <code>nil?</code>. This is where we'll
 start seeing some of the deeper details of compilation, such as register
 allocation and</p>
@@ -441,7 +454,7 @@ is <code>push_op2()</code>:</p>
         Ok(result)
     }
 </code></pre>
-<p>Let's break this down, line by line:</p>
+<p>Let's break the function body down, line by line:</p>
 <ol>
 <li>
 <p><code>let result = self.acquire_reg();</code></p>
@@ -500,7 +513,121 @@ putting the final result in the result register</li>
 </ul>
 <p>Compiling <code>nil?</code> was hopefully quite simple. Let's look at something much more
 involved, now.</p>
-<h3><a class="header" href="#compiling-function-application-what-will-it-be" id="compiling-function-application-what-will-it-be">Compiling function application: [what will it be???]</a></h3>
+<h3><a class="header" href="#compiling-anonymous-functions" id="compiling-anonymous-functions">Compiling anonymous functions</a></h3>
+<p>Function compilation is also initiated <em>apply</em> as a function is a compound
+expression and cannot be reduced to a value by a single <em>eval</em>.</p>
+<pre><code class="language-rust ignore">                ...
+                &quot;lambda&quot; =&gt; self.compile_anonymous_function(mem, args),
+                ...
+</code></pre>
+<pre><code class="language-rust ignore">    fn compile_anonymous_function&lt;'guard&gt;(
+        &amp;mut self,
+        mem: &amp;'guard MutatorView,
+        params: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;Register, RuntimeError&gt; {
+        let items = vec_from_pairs(mem, params)?;
+
+        if items.len() &lt; 2 {
+            return Err(err_eval(
+                &quot;An anonymous function definition must have at least (lambda (params) expr)&quot;,
+            ));
+        }
+
+        // a function consists of (name (params) expr1 .. exprn)
+        let fn_params = vec_from_pairs(mem, items[0])?;
+        let fn_exprs = &amp;items[1..];
+
+        // compile the function to a Function object
+        let fn_object = compile_function(mem, Some(&amp;self.vars), mem.nil(), &amp;fn_params, fn_exprs)?;
+
+        // load the function object as a literal
+        let dest = self.push_load_literal(mem, fn_object)?;
+
+        // if fn_object has nonlocal refs, compile a MakeClosure instruction in addition, replacing
+        // the Function register with a Partial with a closure environment
+        match *fn_object {
+            Value::Function(f) =&gt; {
+                if f.is_closure() {
+                    self.push(
+                        mem,
+                        Opcode::MakeClosure {
+                            function: dest,
+                            dest,
+                        },
+                    )?;
+                }
+            }
+            // 's gotta be a function
+            _ =&gt; unreachable!(),
+        }
+
+        Ok(dest)
+    }
+</code></pre>
+<p>Now we return to the body of <code>compile_function()</code>, as promised.</p>
+<pre><code class="language-rust ignore">    fn compile_function&lt;'guard&gt;(
+        mut self,
+        mem: &amp;'guard MutatorView,
+        name: TaggedScopedPtr&lt;'guard&gt;,
+        params: &amp;[TaggedScopedPtr&lt;'guard&gt;],
+        exprs: &amp;[TaggedScopedPtr&lt;'guard&gt;],
+    ) -&gt; Result&lt;ScopedPtr&lt;'guard, Function&gt;, RuntimeError&gt; {
+        // validate function name
+        self.name = match *name {
+            Value::Symbol(s) =&gt; Some(String::from(s.as_str(mem))),
+            Value::Nil =&gt; None,
+            _ =&gt; {
+                return Err(err_eval(
+                    &quot;A function name may be nil (anonymous) or a symbol (named)&quot;,
+                ))
+            }
+        };
+        let fn_name = name;
+
+        // validate arity
+        if params.len() &gt; 254 {
+            return Err(err_eval(&quot;A function cannot have more than 254 parameters&quot;));
+        }
+        // put params into a list for the Function object
+        let fn_params = List::from_slice(mem, params)?;
+
+        // also assign params to the first level function scope and give each one a register
+        let mut param_scope = Scope::new();
+        self.next_reg = param_scope.push_bindings(params, self.next_reg)?;
+        self.vars.scopes.push(param_scope);
+
+        // validate expression list
+        if exprs.len() == 0 {
+            return Err(err_eval(&quot;A function must have at least one expression&quot;));
+        }
+
+        // compile expressions
+        let mut result_reg = 0;
+        for expr in exprs.iter() {
+            result_reg = self.compile_eval(mem, *expr)?;
+        }
+
+        // pop parameter scope
+        let closing_instructions = self.vars.pop_scope();
+        for opcode in &amp;closing_instructions {
+            self.push(mem, *opcode)?;
+        }
+
+        // finish with a return
+        let fn_bytecode = self.bytecode.get(mem);
+        fn_bytecode.push(mem, Opcode::Return { reg: result_reg })?;
+
+        let fn_nonlocals = self.vars.get_nonlocals(mem)?;
+
+        Ok(Function::alloc(
+            mem,
+            fn_name,
+            fn_params,
+            fn_bytecode,
+            fn_nonlocals,
+        )?)
+    }
+</code></pre>
 
                     </main>
 
