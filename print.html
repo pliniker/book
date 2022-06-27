@@ -4471,12 +4471,34 @@ putting the final result in the result register</li>
 <p>Compiling <code>nil?</code> was hopefully quite simple. Let's look at something much more
 involved, now.</p>
 <h3><a class="header" href="#compiling-anonymous-functions" id="compiling-anonymous-functions">Compiling anonymous functions</a></h3>
-<p>Function compilation is also initiated <em>apply</em> as a function is a compound
-expression and cannot be reduced to a value by a single <em>eval</em>.</p>
+<p>An anonymous function is defined, syntactically, as:</p>
+<pre><code class="language-ignore">(lambda (param1 param2)
+  (expr1)
+  (expr2)
+  (return-expr))
+</code></pre>
+<p>There are 0 or more parameters and 1 or more expresssions in the body of the
+function. The last expression of the body provides the return value.</p>
+<p>Function compilation is initiated by <em>apply</em>. This is because a function is a
+compound expression and cannot be reduced to a value by a single <em>eval</em>. Here's
+the line in <code>compile_apply()</code> that calls anonymous function compilation:</p>
 <pre><code class="language-rust ignore">                ...
                 &quot;lambda&quot; =&gt; self.compile_anonymous_function(mem, args),
                 ...
 </code></pre>
+<p>Let's look at the type signature of <code>compile_anonymous_function()</code>:</p>
+<pre><code class="language-rust ignore">    fn compile_anonymous_function&lt;'guard&gt;(
+        &amp;mut self,
+        mem: &amp;'guard MutatorView,
+        params: TaggedScopedPtr&lt;'guard&gt;,
+    ) -&gt; Result&lt;Register, RuntimeError&gt; {
+</code></pre>
+<p>The <code>params</code> parameter will be expected to be a <code>Pair</code> list: firstly, a list of
+parameter names, followed by function body expressions.</p>
+<p>The return value from is the same as all the other compilation functions so far:
+<code>Result&lt;Register&gt;</code>. The compiled code will return a pointer to the function
+object in a register.</p>
+<p>Here is the function in full:</p>
 <pre><code class="language-rust ignore">    fn compile_anonymous_function&lt;'guard&gt;(
         &amp;mut self,
         mem: &amp;'guard MutatorView,
@@ -4521,7 +4543,20 @@ expression and cannot be reduced to a value by a single <em>eval</em>.</p>
         Ok(dest)
     }
 </code></pre>
-<p>Now we return to the body of <code>compile_function()</code>, as promised.</p>
+<p>After converting <code>Pair</code> lists to <code>Vec</code>s for convenience (wherein parameter names
+and function body expressions are separated) the process calls into function
+<code>compile_function()</code>, which brings us full circle to <em>eval</em>.</p>
+<p>In <code>compile_function()</code>, below:</p>
+<ol>
+<li>a <code>Scope</code> is instantiated and the parameters are pushed on to this outermost
+scope.</li>
+<li>the function body expressions are iterated over, <em>eval</em>-ing each one</li>
+<li>any upvalues that will be closed over as the compiled-function exits and goes
+out of scope have upvalue instructions generated</li>
+<li>a <code>Function</code> object is returned with all details necessary to running the
+function in the VM environment</li>
+</ol>
+<p>Here is <code>compile_function()</code>:</p>
 <pre><code class="language-rust ignore">    fn compile_function&lt;'guard&gt;(
         mut self,
         mem: &amp;'guard MutatorView,
@@ -4585,6 +4620,23 @@ expression and cannot be reduced to a value by a single <em>eval</em>.</p>
         )?)
     }
 </code></pre>
+<p>Note that in addition to generating upvalue instructions as the
+compiled-function goes out of scope, the calling compiler function
+<code>compile_anonymous_function()</code> will issue a <code>MakeClosure</code> opcode such that a
+closure object is put in the return register rather than a direct <code>Function</code>
+object reference.</p>
+<p>In our language, a closure object is represented by the <code>Partial</code> data structure</p>
+<ul>
+<li>a struct that represents a <code>Function</code> object pointer plus closed over values
+and/or partially applied arguments. This data structure was described in the
+chapter <a href="./chapter-interp-vm-impl.html">Virtual Machine: Implementation</a>.</li>
+</ul>
+<p>Thus ends our tour of our interpreter.</p>
+<h2><a class="header" href="#concluding-remarks" id="concluding-remarks">Concluding remarks</a></h2>
+<p>In this section, we've looked at a ground-up compiler and virtual machine
+implementation within a memory-safe allocation system.</p>
+<p>There is, of course, much more to explore in the VM and compiler source code.
+The reader is encouraged to experiment with running and modifying the source.</p>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written" id="404---this-chapter-has-not-yet-been-written">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-1" id="404---this-chapter-has-not-yet-been-written-1">404 - this chapter has not yet been written</a></h1>
 <h1><a class="header" href="#404---this-chapter-has-not-yet-been-written-2" id="404---this-chapter-has-not-yet-been-written-2">404 - this chapter has not yet been written</a></h1>
