@@ -1697,6 +1697,9 @@ a trait.</p>
     type Output;
 
     fn run(&amp;self, mem: &amp;MutatorView, input: Self::Input) -&gt; Result&lt;Self::Output, RuntimeError&gt;;
+
+    // TODO
+    // function to return iterator that iterates over roots
 }
 </code></pre>
 <p>If a piece of code wants to access the heap, it <em>must</em> implement this trait!</p>
@@ -2663,7 +2666,7 @@ it safely. Here's <code>with_capcity()</code>, now:</p>
             .ok_or(RuntimeError::new(ErrorKind::BadAllocationRequest))?;
 
         Ok(RawArray {
-            capacity: capacity,
+            capacity,
             ptr: NonNull::new(mem.alloc_array(capacity_bytes)?.as_ptr() as *mut T),
         })
     }
