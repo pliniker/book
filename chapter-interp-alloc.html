@@ -403,9 +403,6 @@ a trait.</p>
     type Output;
 
     fn run(&amp;self, mem: &amp;MutatorView, input: Self::Input) -&gt; Result&lt;Self::Output, RuntimeError&gt;;
-
-    // TODO
-    // function to return iterator that iterates over roots
 }
 </code></pre>
 <p>If a piece of code wants to access the heap, it <em>must</em> implement this trait!</p>
