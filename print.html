@@ -461,8 +461,8 @@ pub const BLOCK_SIZE: usize = 1 &lt;&lt; BLOCK_SIZE_BITS;
 <p>Next, we'll define a struct that wraps the block with a bump pointer and other
 metadata.</p>
 <pre><code class="language-rust ignore">pub struct BumpBlock {
-    cursor: usize,
-    limit: usize,
+    cursor: *const u8,
+    limit: *const u8,
     block: Block,
     meta: BlockMeta,
 }
@@ -698,22 +698,29 @@ to try, and repeat that until we've either <em>found</em> a big enough hole or
 reached the end of the block, exhausting our options.</p>
 <p>The new definition of <code>BumpBlock::inner_alloc()</code> reads as follows:</p>
 <pre><code class="language-rust ignore">    pub fn inner_alloc(&amp;mut self, alloc_size: usize) -&gt; Option&lt;*const u8&gt; {
-        let next_bump = self.cursor + alloc_size;
+        let ptr = self.cursor as usize;
+        let limit = self.limit as usize;
 
-        if next_bump &gt; self.limit {
-            if self.limit &lt; constants::BLOCK_CAPACITY {
-                if let Some((cursor, limit)) = self.meta.find_next_available_hole(self.limit) {
-                    self.cursor = cursor;
-                    self.limit = limit;
+        let next_ptr = ptr.checked_sub(alloc_size)? &amp; constants::ALLOC_ALIGN_MASK;
+
+        if next_ptr &lt; limit {
+            let block_relative_limit = unsafe { self.limit.sub(self.block.as_ptr() as usize) } as usize;
+
+            if block_relative_limit &gt; 0 {
+                if let Some((cursor, limit)) = self.meta.find_next_available_hole(block_relative_limit) {
+                    // TODO this state mechanism isn't necessarily the most correct:
+                    //  if the next hole is still not big enough, we've still updated the bump
+                    //  pointer. Maybe we _don't_ want to do that?
+                    self.cursor = unsafe { self.block.as_ptr().add(cursor) };
+                    self.limit = unsafe { self.block.as_ptr().add(limit) };
                     return self.inner_alloc(alloc_size);
                 }
             }
 
             None
         } else {
-            let offset = self.cursor;
-            self.cursor = next_bump;
-            unsafe { Some(self.block.as_ptr().add(offset) as *const u8) }
+            self.cursor = next_ptr as *const u8;
+            Some(self.cursor)
         }
     }
 </code></pre>
