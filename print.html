@@ -548,7 +548,7 @@ marked objects in it. If this is ever <code>false</code>, the entire block can b
 deallocated.</li>
 </ul>
 <p>This struct contains one function we will study:</p>
-<pre><code class="language-rust ignore">    pub fn find_next_available_hole(&amp;self, starting_at: usize) -&gt; Option&lt;(usize, usize)&gt; {
+<pre><code class="language-rust ignore">    pub fn __find_next_available_hole(&amp;self, starting_at: usize) -&gt; Option&lt;(usize, usize)&gt; {
         let mut count = 0;
         let mut start: Option&lt;usize&gt; = None;
         let mut stop: usize = 0;
@@ -707,7 +707,7 @@ reached the end of the block, exhausting our options.</p>
             let block_relative_limit = unsafe { self.limit.sub(self.block.as_ptr() as usize) } as usize;
 
             if block_relative_limit &gt; 0 {
-                if let Some((cursor, limit)) = self.meta.find_next_available_hole(block_relative_limit) {
+                if let Some((cursor, limit)) = self.meta.find_next_available_hole(block_relative_limit, alloc_size) {
                     // TODO this state mechanism isn't necessarily the most correct:
                     //  if the next hole is still not big enough, we've still updated the bump
                     //  pointer. Maybe we _don't_ want to do that?
