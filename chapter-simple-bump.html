@@ -254,53 +254,46 @@ marked objects in it. If this is ever <code>false</code>, the entire block can b
 deallocated.</li>
 </ul>
 <p>This struct contains one function we will study:</p>
-<pre><code class="language-rust ignore">    pub fn __find_next_available_hole(&amp;self, starting_at: usize) -&gt; Option&lt;(usize, usize)&gt; {
+<pre><code class="language-rust ignore">    /// When it comes to finding allocatable holes, we bump-allocate downward.
+    pub fn find_next_available_hole(
+        &amp;self,
+        starting_at: usize,
+        alloc_size: usize,
+    ) -&gt; Option&lt;(usize, usize)&gt; {
+        // The count of consecutive avaliable holes. Must take into account a conservatively marked
+        // hole at the beginning of the sequence.
         let mut count = 0;
-        let mut start: Option&lt;usize&gt; = None;
-        let mut stop: usize = 0;
-
         let starting_line = starting_at / constants::LINE_SIZE;
+        let lines_required = (alloc_size + constants::LINE_SIZE - 1) / constants::LINE_SIZE;
+        // Counting down from the given search start index
+        let mut end = starting_line;
 
-        for index in starting_line..constants::LINE_COUNT {
-            let abs_index = starting_line + index;
-
+        for index in (0..starting_line).rev() {
             let marked = unsafe { *self.lines.add(index) };
 
-            // count unmarked lines
             if marked == 0 {
+                // count unmarked lines
                 count += 1;
 
-                // if this is the first line in a hole (and not the zeroth line), consider it
-                // conservatively marked and skip to the next line
-                if count == 1 &amp;&amp; abs_index &gt; 0 {
-                    continue;
-                }
-
-                // record the first hole index
-                if start.is_none() {
-                    start = Some(abs_index);
-                }
-
-                // stop is now at the end of this line
-                stop = abs_index + 1;
-            }
-
-            // if we reached a marked line or the end of the block, see if we have
-            // a valid hole to work with
-            if count &gt; 0 &amp;&amp; (marked &gt; 0 || stop &gt;= constants::LINE_MARK_COUNT) {
-                if let Some(start) = start {
-                    let cursor = start * constants::LINE_SIZE;
-                    let limit = stop * constants::LINE_SIZE;
-
+                if index == 0 &amp;&amp; count &gt;= lines_required {
+                    let limit = index * constants::LINE_SIZE;
+                    let cursor = end * constants::LINE_SIZE;
                     return Some((cursor, limit));
                 }
-            }
+            } else {
+                // This block is marked
+                if count &gt; lines_required {
+                    // But at least 2 previous blocks were not marked. Return the hole, considering the
+                    // immediately preceding block as conservatively marked
+                    let limit = (index + 2) * constants::LINE_SIZE;
+                    let cursor = end * constants::LINE_SIZE;
+                    return Some((cursor, limit));
+                }
 
-            // if this line is marked and we didn't return a new cursor/limit pair by now,
-            // reset the hole state
-            if marked &gt; 0 {
+                // If this line is marked and we didn't return a new cursor/limit pair by now,
+                // reset the hole search state
                 count = 0;
-                start = None;
+                end = index;
             }
         }
 
@@ -418,9 +411,6 @@ reached the end of the block, exhausting our options.</p>
                     .meta
                     .find_next_available_hole(block_relative_limit, alloc_size)
                 {
-                    // TODO this state mechanism isn't necessarily the most correct:
-                    //  if the next hole is still not big enough, we've still updated the bump
-                    //  pointer. Maybe we _don't_ want to do that?
                     self.cursor = unsafe { self.block.as_ptr().add(cursor) };
                     self.limit = unsafe { self.block.as_ptr().add(limit) };
                     return self.inner_alloc(alloc_size);
