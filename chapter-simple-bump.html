@@ -153,7 +153,9 @@ simplest way to do this is to write objects into a block one after the other
 in consecutive order. This is bump allocation - we have a pointer, the bump
 pointer, which points at the space in the block after the last object that
 was written. When the next object is written, the bump pointer is incremented
-to point to the space after <em>that</em> object <sup class="footnote-reference"><a href="#1">1</a></sup>.</p>
+to point to the space after <em>that</em> object.</p>
+<p>In a twist of mathematical convenience, though, it is <a href="https://fitzgeraldnick.com/2019/11/01/always-bump-downwards.html">more efficient</a> to
+bump allocate from a high memory location <em>downwards</em>. We will do that.</p>
 <p>We will used a fixed power-of-two block size. The benefit of this is that
 given a pointer to an object, by zeroing the bits of the pointer that represent
 the block size, the result points to the beginning of the block. This will
@@ -164,8 +166,8 @@ different use cases may show different optimal sizes.</p>
 <pre><code class="language-rust ignore">pub const BLOCK_SIZE_BITS: usize = 15;
 pub const BLOCK_SIZE: usize = 1 &lt;&lt; BLOCK_SIZE_BITS;
 </code></pre>
-<p>Next, we'll define a struct that wraps the block with a bump pointer and other
-metadata.</p>
+<p>Next, we'll define a struct that wraps the block with a bump pointer and garbage
+collection metadata.</p>
 <pre><code class="language-rust ignore">pub struct BumpBlock {
     cursor: *const u8,
     limit: *const u8,
@@ -179,30 +181,39 @@ for this section. The other two, <code>limit</code> and <code>meta</code>, will 
 next section.</p>
 <ul>
 <li><code>cursor</code>: this is the bump pointer. In our implementation it is the index
-into the block where the next object can be written.</li>
+into the block where the last object was written.</li>
 <li><code>block</code>: this is the <code>Block</code> itself in which objects will be written.</li>
 </ul>
 <p>For this bump allocation function, the <code>alloc_size</code> parameter should be a number
-of bytes of memory requested. We'll assume that the value provided is equivalent
-to an exact number of words so that we don't end up with badly aligned object
-placement.</p>
+of bytes of memory requested.</p>
+<p>The value of <code>alloc_size</code> may produce an unaligned pointer at which to write the
+object. Fortunately, by bump allocating downward we can apply a simple mask to the
+pointer to align it down to the nearest word.</p>
 <pre><code class="language-rust ignore">impl BumpBlock {
     pub fn inner_alloc(&amp;mut self, alloc_size: usize) -&gt; Option&lt;*const u8&gt; {
-        let next_bump = self.cursor + alloc_size;
+        let block_start_ptr = self.block.as_ptr() as usize;
+        let cursor_ptr = self.cursor as usize;
 
-        if next_bump &gt; constants::BLOCK_SIZE {
+        // align to word boundary
+        let align_mask = usize = !(size_of::&lt;usize&gt;() - 1);
+
+        let next_ptr = cursor_ptr.checked_sub(alloc_size)? &amp; align_mask;
+
+        if next_ptr &lt; block_start_ptr {
+            // allocation would start lower than block beginning, which means
+            // there isn't space in the block for this allocation
             None
         } else {
-            let offset = self.cursor;
-            self.cursor = next_bump;
-            unsafe { Some(self.block.as_ptr().add(offset) as *const u8) }
+            self.cursor = next_ptr as *const u8;
+            Some(next_ptr)
         }
     }
 }
 </code></pre>
 <p>In this overly simplistic initial implementation, allocation will simply return
-<code>None</code> if the block is full. If there <em>is</em> space, it will be returned as a
-<code>Some(*const u8)</code> pointer.</p>
+<code>None</code> if the block does not have enough capacity for the requested
+<code>alloc_size</code>. If there <em>is</em> space, it will be returned as a <code>Some(*const u8)</code>
+pointer.</p>
 <p>Note that this function does not <em>write</em> the object to memory, it merely
 returns a pointer to an available space.  Writing the object will simply
 require invoking the <code>std::ptr::write</code> function. We will do that in a separate
@@ -222,9 +233,15 @@ blocks.</p>
 a block is divided into lines. When objects are marked as live, so are the
 lines that an object occupies. Therefore, only lines that are <em>not</em> marked
 as live are usable for allocation into.</p>
+<p>In our implementation we will use the high bytes of the <code>Block</code> to represent
+these line mark bits, where each line is represented by a single byte.</p>
 <p>We'll need a data structure to represent this. we'll call it <code>BlockMeta</code>,
-but first some constants that we need in order to know how big a line is
-and how many are in a block:</p>
+but first some constants that we need in order to know</p>
+<ul>
+<li>how big a line is</li>
+<li>how many lines are in a block</li>
+<li>how many bytes remain in the <code>Block</code> for allocating into</li>
+</ul>
 <pre><code class="language-rust ignore">pub const LINE_SIZE_BITS: usize = 7;
 pub const LINE_SIZE: usize = 1 &lt;&lt; LINE_SIZE_BITS;
 
@@ -234,26 +251,16 @@ pub const LINE_COUNT: usize = BLOCK_SIZE / LINE_SIZE;
 // We need LINE_COUNT number of bytes for marking lines, so the capacity of a block
 // is reduced by that number of bytes.
 pub const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINE_COUNT;
-
-// The first line-mark offset into the block is here.
-pub const LINE_MARK_START: usize = BLOCK_CAPACITY;
-// How many bytes do we actually need for marking lines, given that the last bytes of
-// the block are not for objects but for marking lines. This _should_ divide cleanly.
-pub const LINE_MARK_COUNT: usize = BLOCK_CAPACITY / LINE_SIZE;
 </code></pre>
 <p>And now the definition of <code>BlockMeta</code>:</p>
 <pre><code class="language-rust ignore">pub struct BlockMeta {
     lines: *mut u8,
 }
 </code></pre>
-<ul>
-<li><code>line_mark</code> is an array of boolean flags, one for each line in a
-block, to indicate whether it has been marked or not.</li>
-<li><code>block_mark</code> simply says whether the entire block has
-marked objects in it. If this is ever <code>false</code>, the entire block can be
-deallocated.</li>
-</ul>
-<p>This struct contains one function we will study:</p>
+<p>This struct contains one member: a pointer to the start of the line mark area.</p>
+<p>The final byte in the line mark area will be used for an entire-block mark bit.</p>
+<p><em>TODO diagram of block layout</em></p>
+<p>The struct <code>BlockMeta</code> contains one function we will study:</p>
 <pre><code class="language-rust ignore">    /// When it comes to finding allocatable holes, we bump-allocate downward.
     pub fn find_next_available_hole(
         &amp;self,
@@ -303,13 +310,12 @@ deallocated.</li>
 <ul>
 <li>The input to this function, <code>starting_at</code>, is the offset into the block at
 which we are looking for a large enough consecutive set of unmarked lines
-to write an object into. The value passed in will be the bump pointer, of
-course, since that is where we last successfully wrote to the block at.</li>
+to write an object into. The value passed in will be the bump pointer since that
+is where we last successfully wrote to the block at.</li>
 <li>The return value is <code>None</code> if no unmarked lines are found.</li>
-<li>If there <em>are</em> unmarked lines after the <code>starting_at</code> point, the return
-value will be a pair of numbers - <code>(cursor, limit)</code> - where <code>cursor</code> will
-be the new bump pointer value and <code>limit</code> will be the upper bound of the
-available hole.</li>
+<li>If there <em>are</em> unmarked lines <em>before</em> (bump allocating downwards, remember)
+the <code>starting_at</code> point, the return value will be a pair of numbers - <code>(cursor, limit)</code> - where <code>cursor</code> will be the new bump pointer value and <code>limit</code> will be
+the lower bound of the available hole.</li>
 </ul>
 <p>The first thing this function does is convert from block byte offset math
 to line count math:</p>
@@ -437,11 +443,6 @@ so that given any object pointer, we can obtain the <code>BlockMeta</code> insta
 <p>In the next chapter we'll handle multiple <code>BumpBlock</code>s so that we can keep
 allocating objects after one block is full.</p>
 <hr />
-<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
-<p>Note that objects can be written from the end of the block down to the beginning
-too, decrementing the bump pointer. This is usually <a href="https://fitzgeraldnick.com/2019/11/01/always-bump-downwards.html">slightly simpler and more
-efficient to implement</a>.</p>
-</div>
 
                     </main>
 
