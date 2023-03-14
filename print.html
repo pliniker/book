@@ -216,6 +216,7 @@ boundaries.</p>
 aligned to 16 byte boundaries for optimal code generation and performance.
 Unaligned loads and stores may be allowed but normally these incur
 performance penalties.</p>
+<p>// TODO DIAGRAM alignment</p>
 <p>While Intel allows unaligned access, the
 <a href="https://software.intel.com/sites/default/files/managed/9e/bc/64-ia-32-architectures-optimization-manual.pdf?wapkw=248966">recommended</a>
 (see section 3.6.4) alignment for objects larger than 64 bits is to 16 byte
@@ -419,10 +420,12 @@ so that the originating block can be _de_fragmented</li>
 Each block is divided into lines. In the original paper, blocks are sized at 32k
 and lines at 128 bytes.  Objects are allocated into blocks using bump allocation.
 Objects can cross line boundaries.</p>
+<p><img src="img/stickyimmix_block.png" alt="StickyImmix Block" /></p>
 <p>During tracing to discover live objects, objects are marked as live, but the
 line, or lines, that each object occupies are also marked as live. This can mean, of
 course, that a line may contain a dead object and a live object but the whole
 line is marked as live.</p>
+<p><img src="img/stickyimmix_marking_object.png" alt="StickyImmix Block" /></p>
 <p>During collection, only lines not marked as live are considered available for
 re-use. Inevitably then, there is acceptance of some amount of fragementation
 at this point.</p>
@@ -551,9 +554,10 @@ pub const BLOCK_CAPACITY: usize = BLOCK_SIZE - LINE_COUNT;
     lines: *mut u8,
 }
 </code></pre>
-<p>This struct contains one member: a pointer to the start of the line mark area.</p>
+<p>This struct contains one member: a pointer to the start of the line mark area.
+This could be easily calculated, of course, so this is just a handy shortcut.</p>
 <p>The final byte in the line mark area will be used for an entire-block mark bit.</p>
-<p><em>TODO diagram of block layout</em></p>
+<p>// TODO DIAGRAM of block layout</p>
 <p>The struct <code>BlockMeta</code> contains one function we will study:</p>
 <pre><code class="language-rust ignore">    /// When it comes to finding allocatable holes, we bump-allocate downward.
     pub fn find_next_available_hole(
@@ -615,8 +619,8 @@ the lower bound of the available hole.</li>
 to line count math:</p>
 <pre><code class="language-rust ignore">         let starting_line = starting_at / constants::LINE_SIZE;
 </code></pre>
-<p>And then iterate over the lines starting with the line that the requested
-byte offset starting point corresponds with:</p>
+<p>Then iterate over the lines starting with the line that the requested byte
+offset starting point corresponds with:</p>
 <pre><code class="language-rust ignore">         for (index, marked) in self.line_mark[starting_line..].iter().enumerate() {
              let abs_index = starting_line + index;
 </code></pre>
@@ -1320,6 +1324,9 @@ up to the interpreter to define.</p>
         let total_size = header_size + object_size;
 
         // round the size to the next word boundary to keep objects aligned and get the size class
+        // TODO BUG? should this be done separately for header and object?
+        //  If the base allocation address is where the header gets placed, perhaps
+        //  this breaks the double-word alignment object alignment desire?
         let alloc_size = alloc_size_of(total_size);
         let size_class = SizeClass::get_for_size(alloc_size)?;
 
