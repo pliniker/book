@@ -178,7 +178,7 @@ freeing many objects, gaps of unused memory appear between objects that are
 too small for most objects but that add up to a measurable percentage of
 wasted space.</li>
 <li>Evacuation: when the collector <em>moves</em> live objects to another block of memory
-so that the originating block can be _de_fragmented</li>
+so that the originating block can be <em>de_fragmented</em></li>
 </ul>
 <h2><a class="header" href="#about-immix" id="about-immix">About Immix</a></h2>
 <p>Immix is a memory management scheme that considers blocks of fixed size at a time.
@@ -194,6 +194,16 @@ line is marked as live.</p>
 usually one byte per mark bit. If <em>any</em> line is marked as live, the whole block
 is also marked as live. There must also, therefore, be a bit that indicates
 block liveness.</p>
+<h3><a class="header" href="#conservative-marking" id="conservative-marking">Conservative marking</a></h3>
+<p>The Immix authors found that marking <em>every</em> line that contains a live object
+could be expensive. For example, many small objects might cross line boundaries,
+requiring two lines to be marked as live. This would require looking up the
+object size and calculating whether the object crosses the boundary into the
+next line. To save CPU cycles, they simplified the algorithm by saying that
+any object that fits in a line <em>might</em> cross into the next line so we will
+conservatively <em>consider</em> the next line marked just in case. This sped up
+marking at little fragmentation expense.</p>
+<h3><a class="header" href="#collection" id="collection">Collection</a></h3>
 <p>During collection, only lines not marked as live are considered available for
 re-use. Inevitably then, there is acceptance of some amount of fragmentation
 at this point.</p>
