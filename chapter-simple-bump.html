@@ -424,7 +424,7 @@ return <code>None</code> to indicate failure.</p>
 </code></pre>
 <h4><a class="header" href="#making-use-of-the-hole-finder" id="making-use-of-the-hole-finder">Making use of the hole finder</a></h4>
 <p>We'll return to the <code>BumpBlock::inner_alloc()</code> function now to make use of
-<code>BlockMeta</code> and it's hole finding operation.</p>
+<code>BlockMeta</code> and its hole finding operation.</p>
 <p>The <code>BumpBlock</code> struct contains two more members: <code>limit</code> and <code>meta</code>. These
 should now be obvious - <code>limit</code> is the known byte offset limit into which
 we can allocate, and <code>meta</code> is the <code>BlockMeta</code> instance associated with the
