@@ -60,9 +60,7 @@ fn load_file(filename: &str) -> Result<String, io::Error> {
 fn read_file(filename: &str) -> Result<(), RuntimeError> {
     let _contents = load_file(&filename)?;
 
-    // TODO
-
-    Ok(())
+    Ok(contents)
 }
 
 /// Read a line at a time, printing the input back out

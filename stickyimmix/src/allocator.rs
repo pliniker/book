@@ -122,15 +122,3 @@ pub trait AllocHeader: Sized {
     fn type_id(&self) -> Self::TypeId;
 }
 // ANCHOR_END: DefAllocHeader
-
-/// Return the allocated size of an object as it's size_of::<T>() value rounded
-/// up to a double-word boundary
-///
-/// TODO this isn't correctly implemented, as aligning the object to a double-word
-/// boundary while considering header size (which is not known to this libarary
-/// until compile time) means touching numerous bump-allocation code points with
-/// some math and bitwise ops I haven't worked out yet
-pub fn alloc_size_of(object_size: usize) -> usize {
-    let align = size_of::<usize>(); // * 2;
-    (object_size + (align - 1)) & !(align - 1)
-}

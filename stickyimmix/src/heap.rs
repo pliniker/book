@@ -177,11 +177,10 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         // TODO BUG? should this be done separately for header and object?
         //  If the base allocation address is where the header gets placed, perhaps
         //  this breaks the double-word alignment object alignment desire?
-        let alloc_size = alloc_size_of(total_size);
-        let size_class = SizeClass::get_for_size(alloc_size)?;
+        let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the object
-        let space = self.find_space(alloc_size, size_class)?;
+        let space = self.find_space(total_size, size_class)?;
 
         // instantiate an object header for type T, setting the mark bit to "allocated"
         let header = Self::Header::new::<T>(object_size as ArraySize, size_class, Mark::Allocated);
@@ -211,11 +210,10 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         let total_size = header_size + size_bytes as usize;
 
         // round the size to the next word boundary to keep objects aligned and get the size class
-        let alloc_size = alloc_size_of(total_size);
-        let size_class = SizeClass::get_for_size(alloc_size)?;
+        let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the array
-        let space = self.find_space(alloc_size, size_class)?;
+        let space = self.find_space(total_size, size_class)?;
 
         // instantiate an object header for an array, setting the mark bit to "allocated"
         let header = Self::Header::new_array(size_bytes, size_class, Mark::Allocated);
