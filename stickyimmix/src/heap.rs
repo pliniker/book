@@ -5,7 +5,7 @@ use std::ptr::{write, NonNull};
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
-    alloc_size_of, AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, SizeClass,
+    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, SizeClass,
 };
 use crate::bumpblock::BumpBlock;
 use crate::constants;

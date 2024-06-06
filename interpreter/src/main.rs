@@ -57,8 +57,8 @@ fn load_file(filename: &str) -> Result<String, io::Error> {
 }
 
 /// Read and evaluate an entire file
-fn read_file(filename: &str) -> Result<(), RuntimeError> {
-    let _contents = load_file(&filename)?;
+fn read_file(filename: &str) -> Result<String, RuntimeError> {
+    let contents = load_file(&filename)?;
 
     Ok(contents)
 }
@@ -136,6 +136,7 @@ fn main() {
             eprintln!("Terminated: {}", err);
             process::exit(1);
         });
+        // TODO
     } else {
         // otherwise begin a repl
         read_print_loop().unwrap_or_else(|err| {

@@ -204,12 +204,19 @@ impl<T: Sized + Clone> Container<T> for Array<T> {
 }
 
 impl<T: Sized + Clone> FillContainer<T> for Array<T> {
+    /// Increase the size of the array to `size` and fill the new slots with
+    /// copies of `item`. If `size` is less than the current length of the array,
+    /// does nothing.
     fn fill<'guard>(
         &self,
         mem: &'guard MutatorView,
         size: ArraySize,
         item: T,
     ) -> Result<(), RuntimeError> {
+        if self.borrow.get() != INTERIOR_ONLY {
+            return Err(RuntimeError::new(ErrorKind::MutableBorrowError));
+        }
+
         let length = self.length();
 
         if length > size {
@@ -383,6 +390,10 @@ impl FillAnyContainer for Array<TaggedCellPtr> {
         size: ArraySize,
         item: TaggedScopedPtr<'guard>,
     ) -> Result<(), RuntimeError> {
+        if self.borrow.get() != INTERIOR_ONLY {
+            return Err(RuntimeError::new(ErrorKind::MutableBorrowError));
+        }
+
         let length = self.length();
 
         if length > size {

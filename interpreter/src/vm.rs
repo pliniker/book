@@ -284,7 +284,9 @@ impl Thread {
         let globals = self.globals.get(mem);
         let instr = self.instr.get(mem);
 
-        // Establish a 256-register window into the stack from the stack base
+        // Establish a 256-register window into the stack from the stack base.
+        // TODO borrowing this slice mutably at this outer level poses problems
+        // for the function call opcode.
         stack.access_slice(mem, |full_stack| {
             let stack_base = self.stack_base.get() as usize;
             let window = &mut full_stack[stack_base..stack_base + 256];
@@ -506,10 +508,9 @@ impl Thread {
                         self.stack_base.set(new_stack_base);
                         instr.switch_frame(code, 0);
 
-                        // Ensure the stack has 256 registers allocated
-                        // TODO reset to nil to avoid accidental leakage of previous call values
-                        // TODO Ruh-roh we shouldn't be able to modify the stack size from
-                        // within an access_slice() call :grimace:
+                        // TODO Ensure the stack has 256 registers allocated
+                        // This will need mutable access to the stack, which
+                        // can't be done while borrowing it mutably as a slice.
                         stack.fill(mem, new_stack_base + 256, mem.nil())?;
 
                         Ok(())
