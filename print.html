@@ -3700,9 +3700,7 @@ extracts from this function in this chapter.</p>
         let instr = self.instr.get(mem);
 
         // Establish a 256-register window into the stack from the stack base.
-        // TODO borrowing this slice mutably at this outer level poses problems
-        // for the function call opcode.
-        stack.access_slice(mem, |full_stack| {
+        let status = stack.access_slice(mem, |full_stack| {
             let stack_base = self.stack_base.get() as usize;
             let window = &amp;mut full_stack[stack_base..stack_base + 256];
 
