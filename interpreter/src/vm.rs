@@ -285,9 +285,7 @@ impl Thread {
         let instr = self.instr.get(mem);
 
         // Establish a 256-register window into the stack from the stack base.
-        // TODO borrowing this slice mutably at this outer level poses problems
-        // for the function call opcode.
-        stack.access_slice(mem, |full_stack| {
+        let status = stack.access_slice(mem, |full_stack| {
             let stack_base = self.stack_base.get() as usize;
             let window = &mut full_stack[stack_base..stack_base + 256];
 
@@ -505,13 +503,11 @@ impl Thread {
 
                         // Update the instruction stream to point to the new function
                         let code = function.code(mem);
-                        self.stack_base.set(new_stack_base);
                         instr.switch_frame(code, 0);
 
-                        // TODO Ensure the stack has 256 registers allocated
-                        // This will need mutable access to the stack, which
-                        // can't be done while borrowing it mutably as a slice.
-                        stack.fill(mem, new_stack_base + 256, mem.nil())?;
+                        // stack_base has changed and the next function will expect 256 registers.
+                        // See end of function for expansion of stack backing array.
+                        self.stack_base.set(new_stack_base);
 
                         Ok(())
                     };
@@ -711,7 +707,13 @@ impl Thread {
             }
 
             Ok(EvalStatus::Pending)
-        })
+        });
+
+        // Expand stack if necessary. This will be a no-op unless stack_base has changed
+        let stack_base = self.stack_base.get();
+        stack.fill(mem, stack_base + 256, mem.nil())?;
+
+        status
     }
 
     /// Given ByteCode, execute up to max_instr more instructions
