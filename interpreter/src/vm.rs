@@ -663,16 +663,32 @@ impl Thread {
                 }
 
                 // TODO
-                Opcode::Add { dest, reg1, reg2 } => unimplemented!(),
+                Opcode::Add {
+                    dest: _,
+                    reg1: _,
+                    reg2: _,
+                } => unimplemented!(),
 
                 // TODO
-                Opcode::Subtract { dest, left, right } => unimplemented!(),
+                Opcode::Subtract {
+                    dest: _,
+                    left: _,
+                    right: _,
+                } => unimplemented!(),
 
                 // TODO
-                Opcode::Multiply { dest, reg1, reg2 } => unimplemented!(),
+                Opcode::Multiply {
+                    dest: _,
+                    reg1: _,
+                    reg2: _,
+                } => unimplemented!(),
 
                 // TODO
-                Opcode::DivideInteger { dest, num, denom } => unimplemented!(),
+                Opcode::DivideInteger {
+                    dest: _,
+                    num: _,
+                    denom: _,
+                } => unimplemented!(),
 
                 // Follow the indirection of an Upvalue to retrieve the value, copy the value to a
                 // local register
