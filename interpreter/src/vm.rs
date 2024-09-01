@@ -732,8 +732,38 @@ impl Thread {
         status
     }
 
-    /// Given ByteCode, execute up to max_instr more instructions
-    fn vm_eval_stream<'guard>(
+    /// Execute a Function completely.
+    /// The given function must take no arguments.
+    /// Returns the result.
+    pub fn exec<'guard>(
+        &self,
+        mem: &'guard MutatorView,
+        function: ScopedPtr<'guard, Function>,
+    ) -> Result<TaggedScopedPtr<'guard>, RuntimeError> {
+        let mut status = EvalStatus::Pending;
+
+        let frames = self.frames.get(mem);
+        frames.push(mem, CallFrame::new_main(function))?;
+
+        let code = function.code(mem);
+        let instr = self.instr.get(mem);
+        instr.switch_frame(code, 0);
+
+        while status == EvalStatus::Pending {
+            status = self.continue_exec(mem, 1024)?;
+            match status {
+                EvalStatus::Return(value) => return Ok(value),
+                _ => (),
+            }
+        }
+
+        Err(err_eval("Unexpected end of evaluation"))
+    }
+
+    // TODO pub fn start_exec<'guard>() - start execution but don't guarantee completion
+
+    /// Execute up to max_instr more instructions
+    pub fn continue_exec<'guard>(
         &self,
         mem: &'guard MutatorView,
         max_instr: ArraySize,
@@ -772,32 +802,5 @@ impl Thread {
         }
 
         Ok(EvalStatus::Pending)
-    }
-
-    /// Evaluate a Function completely, returning the result. The Function passed in should expect
-    /// no arguments.
-    pub fn quick_vm_eval<'guard>(
-        &self,
-        mem: &'guard MutatorView,
-        function: ScopedPtr<'guard, Function>,
-    ) -> Result<TaggedScopedPtr<'guard>, RuntimeError> {
-        let mut status = EvalStatus::Pending;
-
-        let frames = self.frames.get(mem);
-        frames.push(mem, CallFrame::new_main(function))?;
-
-        let code = function.code(mem);
-        let instr = self.instr.get(mem);
-        instr.switch_frame(code, 0);
-
-        while status == EvalStatus::Pending {
-            status = self.vm_eval_stream(mem, 1024)?;
-            match status {
-                EvalStatus::Return(value) => return Ok(value),
-                _ => (),
-            }
-        }
-
-        Err(err_eval("Unexpected end of evaluation"))
     }
 }

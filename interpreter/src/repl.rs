@@ -61,7 +61,7 @@ impl Mutator for ReadEvalPrint {
                 println!("## Compiled:\n```\n{:?}\n```", function);
             }
 
-            let value = thread.quick_vm_eval(mem, function)?;
+            let value = thread.exec(mem, function)?;
 
             if debug {
                 println!("## Evaluated:\n```\n{:?}\n```\n", value);

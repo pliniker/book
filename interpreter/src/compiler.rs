@@ -877,7 +877,7 @@ mod integration {
     ) -> Result<TaggedScopedPtr<'guard>, RuntimeError> {
         let compiled_code = compile(mem, parse(mem, code)?)?;
         println!("RUN CODE {}", code);
-        let result = thread.quick_vm_eval(mem, compiled_code)?;
+        let result = thread.exec(mem, compiled_code)?;
         println!("RUN RESULT {}", result);
         Ok(result)
     }
