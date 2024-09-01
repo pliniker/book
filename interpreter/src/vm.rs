@@ -736,14 +736,8 @@ impl Thread {
     fn vm_eval_stream<'guard>(
         &self,
         mem: &'guard MutatorView,
-        code: ScopedPtr<'guard, ByteCode>,
         max_instr: ArraySize,
     ) -> Result<EvalStatus<'guard>, RuntimeError> {
-        let instr = self.instr.get(mem);
-        // TODO this is broken logic, this function shouldn't switch back to this code object every
-        // time it is called
-        instr.switch_frame(code, 0);
-
         for _ in 0..max_instr {
             match self.eval_next_instr(mem) {
                 // Evaluation paused or completed without error
@@ -793,9 +787,11 @@ impl Thread {
         frames.push(mem, CallFrame::new_main(function))?;
 
         let code = function.code(mem);
+        let instr = self.instr.get(mem);
+        instr.switch_frame(code, 0);
 
         while status == EvalStatus::Pending {
-            status = self.vm_eval_stream(mem, code, 1024)?;
+            status = self.vm_eval_stream(mem, 1024)?;
             match status {
                 EvalStatus::Return(value) => return Ok(value),
                 _ => (),
