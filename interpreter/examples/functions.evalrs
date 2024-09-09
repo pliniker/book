@@ -1,0 +1,10 @@
+
+(def first (list) (car list))
+
+(def rest (list) (cdr list))
+
+(def last (list) (cond  (nil? (cdr list)) (car list)  true (last (cdr list)))))
+
+(set 'x '(a b c d e f g h i j k l m n o p q r x y z))
+(last x)
+

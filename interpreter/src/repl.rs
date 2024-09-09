@@ -3,7 +3,7 @@ use crate::error::{ErrorKind, RuntimeError};
 use crate::memory::{Mutator, MutatorView};
 use crate::parser::parse;
 use crate::safeptr::{CellPtr, TaggedScopedPtr};
-use crate::vm::Thread;
+use crate::vm::{EvalStatus, Thread};
 
 /// A mutator that returns a Repl instance
 pub struct RepMaker {}
@@ -61,7 +61,13 @@ impl Mutator for ReadEvalPrint {
                 println!("## Compiled:\n```\n{:?}\n```", function);
             }
 
-            let value = thread.exec(mem, function)?;
+            let mut status = thread.start_exec(mem, function)?;
+            let value = loop {
+                match status {
+                    EvalStatus::Return(value) => break value,
+                    _ => status = thread.continue_exec(mem, 1024)?,
+                };
+            };
 
             if debug {
                 println!("## Evaluated:\n```\n{:?}\n```\n", value);

@@ -760,7 +760,23 @@ impl Thread {
         Err(err_eval("Unexpected end of evaluation"))
     }
 
-    // TODO pub fn start_exec<'guard>() - start execution but don't guarantee completion
+    /// Start executution of a Function.
+    /// The given function must take no arguments.
+    /// Returns the result.
+    pub fn start_exec<'guard>(
+        &self,
+        mem: &'guard MutatorView,
+        function: ScopedPtr<'guard, Function>,
+    ) -> Result<EvalStatus<'guard>, RuntimeError> {
+        let frames = self.frames.get(mem);
+        frames.push(mem, CallFrame::new_main(function))?;
+
+        let code = function.code(mem);
+        let instr = self.instr.get(mem);
+        instr.switch_frame(code, 0);
+
+        self.continue_exec(mem, 1024)
+    }
 
     /// Execute up to max_instr more instructions
     pub fn continue_exec<'guard>(
