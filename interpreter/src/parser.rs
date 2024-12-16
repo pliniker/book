@@ -18,7 +18,7 @@ struct PairList<'guard> {
 
 impl<'guard> PairList<'guard> {
     /// Create a new empty list
-    fn open(_guard: &'guard dyn MutatorScope) -> PairList {
+    fn open(_guard: &'guard dyn MutatorScope) -> PairList<'guard> {
         PairList {
             head: TaggedCellPtr::new_nil(),
             tail: TaggedCellPtr::new_nil(),
@@ -51,7 +51,7 @@ impl<'guard> PairList<'guard> {
             pair.set_first_source_code_pos(pos);
 
             self.head.set(mem.alloc_tagged(pair)?);
-            self.tail.copy_from(&self.head);
+            self.tail.copy_from(mem, &self.head);
         }
 
         Ok(())

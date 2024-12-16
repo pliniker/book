@@ -318,7 +318,7 @@ impl InstructionStream {
             guard,
             lit_id as ArraySize,
         )?
-        .get_ptr())
+        .get_ptr(guard))
     }
 
     /// Return the next instruction pointer

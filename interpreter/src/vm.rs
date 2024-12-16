@@ -113,10 +113,10 @@ impl Upvalue {
         &self,
         guard: &'guard dyn MutatorScope,
         stack: ScopedPtr<'guard, List>,
-    ) -> Result<TaggedPtr, RuntimeError> {
+    ) -> Result<TaggedCellPtr, RuntimeError> {
         match self.closed.get() {
-            true => Ok(self.value.get_ptr()),
-            false => Ok(IndexedContainer::get(&*stack, guard, self.location)?.get_ptr()),
+            true => Ok(TaggedCellPtr::new_copy(&self.value)),
+            false => Ok(IndexedContainer::get(&*stack, guard, self.location)?),
         }
     }
 
@@ -126,12 +126,12 @@ impl Upvalue {
         &self,
         guard: &'guard dyn MutatorScope,
         stack: ScopedPtr<'guard, List>,
-        ptr: TaggedPtr,
+        ptr: &TaggedCellPtr,
     ) -> Result<(), RuntimeError> {
         match self.closed.get() {
-            true => self.value.set_to_ptr(ptr),
+            true => self.value.copy_from(guard, ptr),
             false => {
-                IndexedContainer::set(&*stack, guard, self.location, TaggedCellPtr::new_ptr(ptr))?
+                IndexedContainer::set(&*stack, guard, self.location, TaggedCellPtr::new_copy(ptr))?
             }
         };
         Ok(())
@@ -143,8 +143,7 @@ impl Upvalue {
         guard: &'guard dyn MutatorScope,
         stack: ScopedPtr<'guard, List>,
     ) -> Result<(), RuntimeError> {
-        let ptr = IndexedContainer::get(&*stack, guard, self.location)?.get_ptr();
-        self.value.set_to_ptr(ptr);
+        IndexedContainer::get(&*stack, guard, self.location)?.copy_into(guard, &self.value);
         self.closed.set(true);
         Ok(())
     }
@@ -302,8 +301,7 @@ impl Thread {
                 // If the call frame stack is empty, the program completed.
                 Opcode::Return { reg } => {
                     // write the return value to register 0
-                    let result = window[reg as usize].get_ptr();
-                    window[RETURN_REG].set_to_ptr(result);
+                    window[RETURN_REG].copy_from(mem, &window[reg as usize]);
 
                     // remove this function's stack frame
                     frames.pop(mem)?;
@@ -322,7 +320,7 @@ impl Thread {
                 // Load a literal into a register from the function literals array
                 Opcode::LoadLiteral { dest, literal_id } => {
                     let literal_ptr = instr.get_literal(mem, literal_id)?;
-                    window[dest as usize].set_to_ptr(literal_ptr);
+                    window[dest as usize].set_to_ptr(mem, literal_ptr);
                 }
 
                 // Evaluate whether the `test` register contains `nil` - if so, set the `dest`
@@ -354,7 +352,7 @@ impl Thread {
                     let reg_val = window[reg as usize].get(mem);
 
                     match *reg_val {
-                        Value::Pair(p) => window[dest as usize].set_to_ptr(p.first.get_ptr()),
+                        Value::Pair(p) => window[dest as usize].copy_from(mem, &p.first),
                         Value::Nil => window[dest as usize].set_to_nil(),
                         _ => return Err(err_eval("Parameter to FirstOfPair is not a list")),
                     }
@@ -365,7 +363,7 @@ impl Thread {
                     let reg_val = window[reg as usize].get(mem);
 
                     match *reg_val {
-                        Value::Pair(p) => window[dest as usize].set_to_ptr(p.second.get_ptr()),
+                        Value::Pair(p) => window[dest as usize].copy_from(mem, &p.second),
                         Value::Nil => window[dest as usize].set_to_nil(),
                         _ => return Err(err_eval("Parameter to SecondOfPair is not a list")),
                     }
@@ -373,12 +371,9 @@ impl Thread {
 
                 // CONS - create a Pair, pointing to `reg1` and `reg2`
                 Opcode::MakePair { dest, reg1, reg2 } => {
-                    let reg1_val = window[reg1 as usize].get_ptr();
-                    let reg2_val = window[reg2 as usize].get_ptr();
-
                     let new_pair = Pair::new();
-                    new_pair.first.set_to_ptr(reg1_val);
-                    new_pair.second.set_to_ptr(reg2_val);
+                    new_pair.first.copy_from(mem, &window[reg1 as usize]);
+                    new_pair.second.copy_from(mem, &window[reg2 as usize]);
 
                     window[dest as usize].set(mem.alloc_tagged(new_pair)?);
                 }
@@ -387,8 +382,8 @@ impl Thread {
                 // to the symbol "true"
                 Opcode::IsIdentical { dest, test1, test2 } => {
                     // compare raw pointers - identity comparison
-                    let test1_val = window[test1 as usize].get_ptr();
-                    let test2_val = window[test2 as usize].get_ptr();
+                    let test1_val = window[test1 as usize].get_ptr(mem);
+                    let test2_val = window[test2 as usize].get_ptr(mem);
 
                     if test1_val == test2_val {
                         window[dest as usize].set(mem.lookup_sym("true"));
@@ -432,7 +427,7 @@ impl Thread {
                 // Set the register `dest` to the inline integer literal
                 Opcode::LoadInteger { dest, integer } => {
                     let tagged_ptr = TaggedPtr::literal_integer(integer);
-                    window[dest as usize].set_to_ptr(tagged_ptr);
+                    window[dest as usize].set_to_ptr(mem, tagged_ptr);
                 }
 
                 // Lookup a global binding and put it in the register `dest`
@@ -551,8 +546,7 @@ impl Thread {
 
                             if arg_count == 0 && arity > 0 {
                                 // Partial is unchanged, no args added, copy directly to dest
-                                window[dest as usize]
-                                    .set_to_ptr(window[function as usize].get_ptr());
+                                window[dest as usize].copy_from(mem, &window[function as usize]);
                                 return Ok(EvalStatus::Pending);
                             } else if arg_count < arity {
                                 // Too few args, bake a new Partial from the existing one, adding the new
@@ -695,14 +689,14 @@ impl Thread {
                 Opcode::GetUpvalue { dest, src } => {
                     let closure_env = window[ENV_REG].get(mem);
                     let upvalue = env_upvalue_lookup(mem, closure_env, src)?;
-                    window[dest as usize].set_to_ptr(upvalue.get(mem, stack)?);
+                    window[dest as usize].copy_from(mem, &upvalue.get(mem, stack)?);
                 }
 
                 // Follow the indirection of an Upvalue to set the value from a local register
                 Opcode::SetUpvalue { dest, src } => {
                     let closure_env = window[ENV_REG].get(mem);
                     let upvalue = env_upvalue_lookup(mem, closure_env, dest)?;
-                    upvalue.set(mem, stack, window[src as usize].get_ptr())?;
+                    upvalue.set(mem, stack, &window[src as usize])?;
                 }
 
                 // Move up to 3 stack register values to the Upvalue objects referring to them

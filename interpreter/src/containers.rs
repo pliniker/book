@@ -208,9 +208,3 @@ pub trait AnyContainerFromSlice: Container<TaggedCellPtr> {
         data: &[TaggedScopedPtr<'guard>],
     ) -> Result<ScopedPtr<'guard, Self>, RuntimeError>;
 }
-
-/// The implementor represents mutable changes via an internal version count
-/// such that the use of any references to an older version return an error
-pub trait VersionedContainer<T: Sized + Clone>: Container<T> {}
-
-pub trait ImmutableContainer<T: Sized + Clone>: Container<T> {}

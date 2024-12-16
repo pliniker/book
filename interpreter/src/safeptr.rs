@@ -211,6 +211,13 @@ impl TaggedCellPtr {
         }
     }
 
+    /// Construct a new TaggedCellPtr from another
+    pub fn new_copy(source: &TaggedCellPtr) -> TaggedCellPtr {
+        TaggedCellPtr {
+            inner: Cell::new(source.inner.get()),
+        }
+    }
+
     pub fn new_ptr(source: TaggedPtr) -> TaggedCellPtr {
         TaggedCellPtr {
             inner: Cell::new(source),
@@ -233,8 +240,13 @@ impl TaggedCellPtr {
     }
 
     /// Take the pointer of another `TaggedCellPtr` and set this instance to point at that object too
-    pub fn copy_from(&self, other: &TaggedCellPtr) {
-        self.inner.set(other.inner.get());
+    pub fn copy_from<'guard>(&self, _guard: &'guard dyn MutatorScope, src: &TaggedCellPtr) {
+        self.inner.set(src.inner.get());
+    }
+
+    /// Set another instance to hold the same pointer as this instance
+    pub fn copy_into<'guard>(&self, _guard: &'guard dyn MutatorScope, dest: &TaggedCellPtr) {
+        dest.inner.set(self.inner.get());
     }
 
     /// Return true if the pointer is nil
@@ -248,12 +260,15 @@ impl TaggedCellPtr {
     }
 
     /// Set this pointer to another TaggedPtr
-    pub fn set_to_ptr(&self, ptr: TaggedPtr) {
+    // TODO DEPRECATE IF POSSIBLE
+    //  - this is only used to set non-object tagged values and should be replaced/renamed
+    pub fn set_to_ptr<'guard>(&self, _guard: &'guard dyn MutatorScope, ptr: TaggedPtr) {
         self.inner.set(ptr)
     }
 
     /// Return the raw TaggedPtr from within
-    pub fn get_ptr(&self) -> TaggedPtr {
+    // TODO DEPRECATE IF POSSIBLE
+    pub fn get_ptr<'guard>(&self, _guard: &'guard dyn MutatorScope) -> TaggedPtr {
         self.inner.get()
     }
 }

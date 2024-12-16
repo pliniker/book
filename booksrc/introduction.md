@@ -36,7 +36,7 @@ All the links below are acknowledged as inspiration or prior art.
 
 * Bob Nystrom's [Crafting Interpreters](http://craftinginterpreters.com/)
 * [The Inko programming language](https://inko-lang.org/)
-* kyren - [luster](https://github.com/kyren/luster) and [gc-arena](https://github.com/kyren/gc-arena)
+* kyren - [piccolo](https://github.com/kyren/piccolo) and [gc-arena](https://github.com/kyren/gc-arena)
 
 ### Memory management
 

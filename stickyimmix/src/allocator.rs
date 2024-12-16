@@ -106,10 +106,10 @@ pub trait AllocHeader: Sized {
     fn new_array(size: ArraySize, size_class: SizeClass, mark: Mark) -> Self;
 
     /// Set the Mark value to "marked"
-    fn mark(&mut self);
+    fn mark(&mut self, value: Mark);
 
     /// Get the current Mark value
-    fn is_marked(&self) -> bool;
+    fn mark_is(&self, value: Mark) -> bool;
 
     /// Get the size class of the object
     fn size_class(&self) -> SizeClass;

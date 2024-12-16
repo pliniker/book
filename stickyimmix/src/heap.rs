@@ -306,9 +306,9 @@ mod tests {
             }
         }
 
-        fn mark(&mut self) {}
+        fn mark(&mut self, _value: Mark) {}
 
-        fn is_marked(&self) -> bool {
+        fn mark_is(&self, _value: Mark) -> bool {
             true
         }
 

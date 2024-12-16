@@ -119,12 +119,12 @@ impl AllocHeader for ObjectHeader {
         }
     }
 
-    fn mark(&mut self) {
-        self.mark = Mark::Marked;
+    fn mark(&mut self, value: Mark) {
+        self.mark = value;
     }
 
-    fn is_marked(&self) -> bool {
-        self.mark == Mark::Marked
+    fn mark_is(&self, value: Mark) -> bool {
+        self.mark == value
     }
 
     fn size_class(&self) -> SizeClass {
