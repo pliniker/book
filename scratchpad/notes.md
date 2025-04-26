@@ -1,6 +1,25 @@
 # Notes
 
+- https://www.steveblackburn.org/pubs/papers/consrc-oopsla-2014.pdf
+- https://docs.rs/portable-atomic/latest/portable_atomic/struct.AtomicUsize.html
+- https://www.hboehm.info/gc/gcdescr.html
+
+## Rooting
+
+Conservative stack scanning.
+- allows for intrusive data structures
+- simpler mutator root management
+  - still need to use Pin to keep roots from escaping
+- need to push all registers to stack
+
+Depends on:
+- fast map of pointer to block
+  - vec + heap?
+- object map in each block
+
 ## Tracing
+
+Precise object scanning.
 
 This _just_ needs:
  - pointer values, not any hard data on types
