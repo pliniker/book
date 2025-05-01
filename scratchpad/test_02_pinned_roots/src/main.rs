@@ -107,10 +107,10 @@ struct HeapItem {
 }
 
 impl HeapItem {
-    fn new<T: Trace>(raw: *const T, tobj: Box<dyn Trace>) -> HeapItem {
+    fn new(addr: usize, tobj: Box<dyn Trace>) -> HeapItem {
         HeapItem {
             mark: false,
-            address: raw as usize,
+            address: addr,
             object: tobj,
         }
     }
@@ -131,24 +131,18 @@ impl Memory {
         }
     }
 
-    fn run<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut Memory),
-    {
-        f(self);
-    }
-
     fn alloc<T: Trace + 'static>(&mut self, object: T) -> Gc<T> {
         let obj: Box<T> = Box::new(object);
         let raw_ptr = &*obj as *const T;
+        let addr = raw_ptr.addr();
 
         let tobj: Box<dyn Trace> = obj;
 
         // put Trace trait object into heap object list
-        let gc_ref = HeapItem::new(raw_ptr, tobj);
-        self.objects.insert(raw_ptr as usize, gc_ref);
+        let gc_ref = HeapItem::new(addr, tobj);
+        self.objects.insert(addr, gc_ref);
 
-        println!("(alloc) {:x}", raw_ptr as usize);
+        println!("(alloc) {:x}", addr);
         Gc::new(raw_ptr)
     }
 
@@ -175,9 +169,9 @@ impl Memory {
         let slice = unsafe { from_raw_parts(stack_base as *const usize, stack_len) };
 
         for stack_item in slice {
-            if *stack_item != 0 {
-                println!("[stack] {:x}", *stack_item);
-            }
+            // if *stack_item != 0 {
+            //     println!("[stack] {:x}", *stack_item);
+            // }
             self.scan.push(StackItem::new(*stack_item));
         }
 
@@ -229,6 +223,14 @@ impl Memory {
         self.collect();
         self.scan.clear();
     }
+
+    fn enter<F>(&mut self, run: F)
+    where
+        F: FnOnce(&mut MutatorView),
+    {
+        let mut delegate = MutatorView::new(self);
+        run(&mut delegate);
+    }
 }
 
 impl Drop for Memory {
@@ -242,7 +244,32 @@ impl Drop for Memory {
     }
 }
 
-fn test_do_some_stuff(mem: &mut Memory) {
+trait MutatorScope {}
+
+struct MutatorView<'memory> {
+    mem: &'memory mut Memory,
+}
+
+impl<'memory> MutatorScope for MutatorView<'memory> {}
+
+impl<'memory> MutatorView<'memory> {
+    fn new(mem: &'memory mut Memory) -> Self {
+        MutatorView { mem }
+    }
+
+    fn alloc<T: 'static>(&mut self, value: T) -> Gc<T>
+    where
+        T: Trace,
+    {
+        self.mem.alloc(value)
+    }
+
+    fn gc(&mut self) {
+        self.mem.gc();
+    }
+}
+
+fn test_do_some_stuff(mem: &mut MutatorView) {
     let mut array = mem.alloc(HeapArray::<HeapString>::new());
     array.debug();
 
@@ -254,9 +281,9 @@ fn test_do_some_stuff(mem: &mut Memory) {
 }
 
 fn main() {
-    let mut mem = Memory::new();
+    let mut arena = Memory::new();
 
-    mem.run(|mem| {
+    arena.enter(|mem| {
         let foo = mem.alloc(HeapString::from("foosball"));
 
         for _ in 0x0..0xF {
