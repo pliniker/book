@@ -6,6 +6,7 @@
    - drop dead objects
 */
 use libc::getcontext;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::hint::black_box;
 use std::mem::MaybeUninit;
@@ -100,14 +101,14 @@ impl StackItem {
     }
 }
 
-struct HeapItem {
+struct HeapItem<'memory> {
     mark: bool,
     address: usize,
-    object: Box<dyn Trace>,
+    object: Box<dyn Trace + 'memory>,
 }
 
-impl HeapItem {
-    fn new(addr: usize, tobj: Box<dyn Trace>) -> HeapItem {
+impl<'memory> HeapItem<'memory> {
+    fn new(addr: usize, tobj: Box<dyn Trace + 'memory>) -> HeapItem<'memory> {
         HeapItem {
             mark: false,
             address: addr,
@@ -116,22 +117,29 @@ impl HeapItem {
     }
 }
 
-struct Memory {
-    objects: BTreeMap<usize, HeapItem>,
+struct MemoryInner<'memory> {
+    objects: BTreeMap<usize, HeapItem<'memory>>,
     scan: Vec<StackItem>,
+}
+
+struct Memory<'memory> {
+    inner: RefCell<MemoryInner<'memory>>,
     base: usize,
 }
 
-impl Memory {
-    fn new() -> Memory {
-        Memory {
+impl<'memory> Memory<'memory> {
+    fn new() -> Memory<'memory> {
+        let inner = MemoryInner::<'memory> {
             objects: BTreeMap::new(),
             scan: Vec::new(),
+        };
+        Memory {
+            inner: RefCell::new(inner),
             base: 0xbeefbabe,
         }
     }
 
-    fn alloc<T: Trace + 'static>(&mut self, object: T) -> Gc<T> {
+    fn alloc<T: Trace + 'memory>(&self, object: T) -> Gc<T> {
         let obj: Box<T> = Box::new(object);
         let raw_ptr = &*obj as *const T;
         let addr = raw_ptr.addr();
@@ -140,14 +148,14 @@ impl Memory {
 
         // put Trace trait object into heap object list
         let gc_ref = HeapItem::new(addr, tobj);
-        self.objects.insert(addr, gc_ref);
+        self.inner.borrow_mut().objects.insert(addr, gc_ref);
 
         println!("(alloc) {:x}", addr);
         Gc::new(raw_ptr)
     }
 
     #[no_mangle]
-    fn scan(&mut self) {
+    fn scan(&self) {
         let mut context = MaybeUninit::zeroed();
         let result = unsafe { getcontext(context.as_mut_ptr()) };
         if result != 0 {
@@ -168,24 +176,30 @@ impl Memory {
         let stack_len = (stack_top - stack_base) / word_size;
         let slice = unsafe { from_raw_parts(stack_base as *const usize, stack_len) };
 
+        let stack_scan = &mut self.inner.borrow_mut().scan;
+
         for stack_item in slice {
             // if *stack_item != 0 {
             //     println!("[stack] {:x}", *stack_item);
             // }
-            self.scan.push(StackItem::new(*stack_item));
+            stack_scan.push(StackItem::new(*stack_item));
         }
 
         black_box(&context);
     }
 
-    fn mark(&mut self) {
+    fn mark(&self) {
         let mut heap_scan: Vec<usize> = Vec::new();
 
+        let mut inner = self.inner.borrow_mut();
+
+        let mut scan = std::mem::take(&mut inner.scan);
+
         // #1 scan the stack for heap objects
-        for item in self.scan.drain(..) {
+        for item in scan.drain(..) {
             let possible_address = item.value;
 
-            if let Some(_) = self.objects.get(&possible_address) {
+            if let Some(_) = inner.objects.get(&possible_address) {
                 heap_scan.push(possible_address);
                 println!("[root] {:x}", possible_address);
             }
@@ -194,7 +208,7 @@ impl Memory {
         // #2 trace the heap object graph
         while heap_scan.len() > 0 {
             if let Some(heap_address) = heap_scan.pop() {
-                if let Some(heap_item) = self.objects.get_mut(&heap_address) {
+                if let Some(heap_item) = inner.objects.get_mut(&heap_address) {
                     heap_item.mark = true;
                     heap_item.object.trace(&mut heap_scan);
                 }
@@ -202,13 +216,15 @@ impl Memory {
         }
     }
 
-    fn collect(&mut self) {
-        let temp = std::mem::take(&mut self.objects);
+    fn collect(&self) {
+        let mut inner = self.inner.borrow_mut();
+
+        let temp = std::mem::take(&mut inner.objects);
 
         temp.into_values().for_each(|mut heap_item| {
             if heap_item.mark {
                 heap_item.mark = false;
-                self.objects.insert(heap_item.address, heap_item);
+                inner.objects.insert(heap_item.address, heap_item);
             } else {
                 println!("<gc> DROP {:x}", heap_item.address);
                 drop(heap_item.object);
@@ -216,26 +232,28 @@ impl Memory {
         });
     }
 
-    fn gc(&mut self) {
+    fn gc(&self) {
         println!("<gc>");
         self.scan();
         self.mark();
         self.collect();
-        self.scan.clear();
     }
 
-    fn enter<F>(&mut self, run: F)
+    fn enter<'guard, F>(&'guard self, run: F)
     where
-        F: FnOnce(&mut MutatorView),
+        F: FnOnce(&MutatorView<'memory, 'guard>),
+        'memory: 'guard,
     {
-        let mut delegate = MutatorView::new(self);
-        run(&mut delegate);
+        let delegate = MutatorView::new(self);
+        run(&delegate);
     }
 }
 
-impl Drop for Memory {
+impl<'memory> Drop for Memory<'memory> {
     fn drop(&mut self) {
-        let temp = std::mem::take(&mut self.objects);
+        let mut inner = self.inner.borrow_mut();
+
+        let temp = std::mem::take(&mut inner.objects);
 
         temp.into_values().for_each(|heap_item| {
             println!("<gc> EXIT {:x}", heap_item.address);
@@ -246,30 +264,30 @@ impl Drop for Memory {
 
 trait MutatorScope {}
 
-struct MutatorView<'memory> {
-    mem: &'memory mut Memory,
+struct MutatorView<'memory, 'guard> {
+    mem: &'guard Memory<'memory>,
 }
 
-impl<'memory> MutatorScope for MutatorView<'memory> {}
+impl<'memory, 'guard> MutatorScope for MutatorView<'memory, 'guard> {}
 
-impl<'memory> MutatorView<'memory> {
-    fn new(mem: &'memory mut Memory) -> Self {
-        MutatorView { mem }
+impl<'memory, 'guard> MutatorView<'memory, 'guard> {
+    fn new(mem: &'guard Memory<'memory>) -> Self {
+        MutatorView::<'memory, 'guard> { mem }
     }
 
-    fn alloc<T: 'static>(&mut self, value: T) -> Gc<T>
+    fn alloc<T: 'memory>(&self, value: T) -> Gc<T>
     where
         T: Trace,
     {
         self.mem.alloc(value)
     }
 
-    fn gc(&mut self) {
+    fn gc(&self) {
         self.mem.gc();
     }
 }
 
-fn test_do_some_stuff(mem: &mut MutatorView) {
+fn test_do_some_stuff(mem: &MutatorView) {
     let mut array = mem.alloc(HeapArray::<HeapString>::new());
     array.debug();
 
@@ -281,7 +299,7 @@ fn test_do_some_stuff(mem: &mut MutatorView) {
 }
 
 fn main() {
-    let mut arena = Memory::new();
+    let arena = Memory::new();
 
     arena.enter(|mem| {
         let foo = mem.alloc(HeapString::from("foosball"));
