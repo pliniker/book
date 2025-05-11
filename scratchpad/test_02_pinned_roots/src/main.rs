@@ -154,7 +154,6 @@ impl<'memory> Memory<'memory> {
         Gc::new(raw_ptr)
     }
 
-    #[no_mangle]
     fn scan(&self) {
         let mut context = MaybeUninit::zeroed();
         let result = unsafe { getcontext(context.as_mut_ptr()) };
