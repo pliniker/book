@@ -9,6 +9,7 @@ use libc::getcontext;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::hint::black_box;
+use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::slice::from_raw_parts;
@@ -297,8 +298,52 @@ fn test_do_some_stuff(mem: &MutatorView) {
     println!("test_do_some_stuff");
 }
 
+fn test_do_all_stuff(mem: &MutatorView) {
+    let foo = mem.alloc(HeapString::from("foosball"));
+
+    for _ in 0x0..0xF {
+        let _bar = mem.alloc(HeapString::from("foobar"));
+    }
+    mem.gc();
+
+    test_do_some_stuff(mem);
+
+    foo.debug();
+    foo.print();
+
+    let bar = mem.alloc(HeapString::from("barbell"));
+    bar.debug();
+
+    mem.gc();
+}
+
+struct Root<'guard, T: Trace> {
+    p: PhantomData<&'guard Gc<T>>,
+}
+
+impl<'guard, T: Trace> Root<'guard, T> {
+    fn new(_variable: &'guard Gc<T>) -> Root<'guard, T> {
+        Root { p: PhantomData }
+    }
+}
+
 fn main() {
     let arena = Memory::new();
+
+    arena.enter(test_do_all_stuff);
+
+    // Regarding pinning...
+    //
+    // - mutable variables can be std::mem::replace()'d etc
+    // - immutable variables can not
+    //
+    // Pinning requires shadowing every root to hold it in place
+    //
+    // - the assumption is that a root might escape from its scope
+    // - The Gc<T> type is most at risk of being escaped by being stored somewhere that can escape
+    // - An immutable Root<'lifetime, T> is not at risk
+    //
+    // Thus the fix to preventing roots escaping is to make all data structures provide a root-based API
 
     arena.enter(|mem| {
         let foo = mem.alloc(HeapString::from("foosball"));
