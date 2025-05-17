@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::hint::black_box;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::slice::from_raw_parts;
 
 ///////////////////////
@@ -23,6 +23,14 @@ trait Trace {
 ///////////////////////
 struct Gc<T: Trace + Sized> {
     inner: *const T,
+}
+
+impl<T: Trace + Sized> Copy for Gc<T> {}
+
+impl<T: Trace + Sized> Clone for Gc<T> {
+    fn clone(&self) -> Self {
+        Gc::new(self.inner)
+    }
 }
 
 impl<T: Trace + Sized> Gc<T> {
@@ -42,21 +50,6 @@ impl<T: Trace + Sized> Gc<T> {
         &*self.inner as &T
     }
 }
-
-/*/
-impl<T: Trace + Sized> Deref for Gc<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        unsafe { &*self.inner as &T }
-    }
-}
-
-impl<T: Trace + Sized> DerefMut for Gc<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        unsafe { &mut *(self.inner as *mut T) }
-    }
-}
-*/
 
 ///////////////////////
 struct HeapString {
@@ -80,23 +73,25 @@ impl Trace for HeapString {
 }
 
 ///////////////////////
-struct HeapArray<T: Trace> {
-    value: Vec<Gc<T>>,
+struct HeapArray<T: Trace + Sized> {
+    value: RefCell<Vec<Gc<T>>>,
 }
 
-impl<T: Trace> HeapArray<T> {
+impl<T: Trace + Sized> HeapArray<T> {
     fn new() -> HeapArray<T> {
-        HeapArray { value: Vec::new() }
+        HeapArray {
+            value: RefCell::new(Vec::new()),
+        }
     }
 
-    fn push(&mut self, object: &Root<T>) {
-        self.value.push(object);
+    fn push(&self, object: &Root<T>) {
+        self.value.borrow_mut().push(object.var);
     }
 }
 
-impl<T: Trace> Trace for HeapArray<T> {
+impl<T: Trace + Sized> Trace for HeapArray<T> {
     fn trace(&self, objects: &mut Vec<usize>) {
-        for item in self.value.iter() {
+        for item in self.value.borrow().iter() {
             objects.push(item.addr())
         }
     }
@@ -338,12 +333,12 @@ impl<'guard, T: Trace> Deref for Root<'guard, T> {
 
 ///////////////////////
 fn test_do_some_stuff(mem: &MutatorView) {
-    let mut array = mem.alloc(HeapArray::<HeapString>::new());
+    let array = mem.alloc(HeapArray::<HeapString>::new());
     array.debug();
 
     for _ in 0x0..0xF {
         let bar = mem.alloc(HeapString::from("foobar"));
-        array.push(bar);
+        array.push(&bar);
     }
     println!("test_do_some_stuff");
 }
