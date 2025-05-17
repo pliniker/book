@@ -14,11 +14,13 @@ use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::slice::from_raw_parts;
 
+///////////////////////
 trait Trace {
     /// Give me all your pointers
     fn trace(&self, _objects: &mut Vec<usize>) {}
 }
 
+///////////////////////
 struct Gc<T: Trace + Sized> {
     inner: *const T,
 }
@@ -35,8 +37,13 @@ impl<T: Trace + Sized> Gc<T> {
     fn debug(&self) {
         println!("object {:x}", self.inner.addr());
     }
+
+    unsafe fn as_ref(&self) -> &T {
+        &*self.inner as &T
+    }
 }
 
+/*/
 impl<T: Trace + Sized> Deref for Gc<T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -49,7 +56,9 @@ impl<T: Trace + Sized> DerefMut for Gc<T> {
         unsafe { &mut *(self.inner as *mut T) }
     }
 }
+*/
 
+///////////////////////
 struct HeapString {
     value: String,
 }
@@ -70,6 +79,7 @@ impl Trace for HeapString {
     fn trace(&self, _objects: &mut Vec<usize>) {}
 }
 
+///////////////////////
 struct HeapArray<T: Trace> {
     value: Vec<Gc<T>>,
 }
@@ -79,7 +89,7 @@ impl<T: Trace> HeapArray<T> {
         HeapArray { value: Vec::new() }
     }
 
-    fn push(&mut self, object: Gc<T>) {
+    fn push(&mut self, object: &Root<T>) {
         self.value.push(object);
     }
 }
@@ -92,6 +102,7 @@ impl<T: Trace> Trace for HeapArray<T> {
     }
 }
 
+///////////////////////
 struct StackItem {
     value: usize,
 }
@@ -102,6 +113,7 @@ impl StackItem {
     }
 }
 
+///////////////////////
 struct HeapItem<'memory> {
     mark: bool,
     address: usize,
@@ -118,11 +130,13 @@ impl<'memory> HeapItem<'memory> {
     }
 }
 
+///////////////////////
 struct MemoryInner<'memory> {
     objects: BTreeMap<usize, HeapItem<'memory>>,
     scan: Vec<StackItem>,
 }
 
+///////////////////////
 struct Memory<'memory> {
     inner: RefCell<MemoryInner<'memory>>,
     base: usize,
@@ -262,8 +276,10 @@ impl<'memory> Drop for Memory<'memory> {
     }
 }
 
+///////////////////////
 trait MutatorScope {}
 
+///////////////////////
 struct MutatorView<'memory, 'guard> {
     mem: &'guard Memory<'memory>,
 }
@@ -275,11 +291,18 @@ impl<'memory, 'guard> MutatorView<'memory, 'guard> {
         MutatorView::<'memory, 'guard> { mem }
     }
 
-    fn alloc<T: 'memory>(&self, value: T) -> Gc<T>
+    fn alloc_raw<T: 'memory>(&self, value: T) -> Gc<T>
     where
         T: Trace,
     {
         self.mem.alloc(value)
+    }
+
+    fn alloc<T: 'memory>(&self, value: T) -> Root<'memory, T>
+    where
+        T: Trace,
+    {
+        Root::new(self.alloc_raw(value))
     }
 
     fn gc(&self) {
@@ -287,6 +310,33 @@ impl<'memory, 'guard> MutatorView<'memory, 'guard> {
     }
 }
 
+///////////////////////
+struct Root<'guard, T: Trace> {
+    var: Gc<T>,
+    p: PhantomData<&'guard T>,
+}
+
+impl<'guard, T: Trace> Root<'guard, T> {
+    fn new(var: Gc<T>) -> Root<'guard, T> {
+        Root {
+            var,
+            p: PhantomData,
+        }
+    }
+
+    fn debug(&self) {
+        self.var.debug();
+    }
+}
+
+impl<'guard, T: Trace> Deref for Root<'guard, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.var.as_ref() }
+    }
+}
+
+///////////////////////
 fn test_do_some_stuff(mem: &MutatorView) {
     let mut array = mem.alloc(HeapArray::<HeapString>::new());
     array.debug();
@@ -317,20 +367,10 @@ fn test_do_all_stuff(mem: &MutatorView) {
     mem.gc();
 }
 
-struct Root<'guard, T: Trace> {
-    p: PhantomData<&'guard Gc<T>>,
-}
-
-impl<'guard, T: Trace> Root<'guard, T> {
-    fn new(_variable: &'guard Gc<T>) -> Root<'guard, T> {
-        Root { p: PhantomData }
-    }
-}
-
 fn main() {
     let arena = Memory::new();
 
-    arena.enter(test_do_all_stuff);
+    //arena.enter(test_do_all_stuff);
 
     // Regarding pinning...
     //
@@ -344,6 +384,12 @@ fn main() {
     // - An immutable Root<'lifetime, T> is not at risk
     //
     // Thus the fix to preventing roots escaping is to make all data structures provide a root-based API
+    //
+    // The interior mutability pattern must be strictly adhered to. Is there a way to enforce???
+    //
+    // TODO: arena for reference counted input/output pointers
+
+    let mut escapees = Vec::new();
 
     arena.enter(|mem| {
         let foo = mem.alloc(HeapString::from("foosball"));
@@ -362,5 +408,7 @@ fn main() {
         bar.debug();
 
         mem.gc();
+
+        escapees.push(foo);
     });
 }
