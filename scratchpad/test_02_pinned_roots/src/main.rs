@@ -1,10 +1,20 @@
-/*
- Here we will:
- - a simple allocator that keeps a copy of the object in a Vec
- - a stack scanner, that will
-   - mark objects as live
-   - drop dead objects
-*/
+// Regarding pinning...
+//
+// - mutable variables can be std::mem::replace()'d etc
+// - immutable variables can not
+//
+// Pinning requires shadowing every root to hold it in place
+//
+// - the assumption is that a root might escape from its scope
+// - The Gc<T> type is most at risk of being escaped by being stored somewhere that can escape
+// - An immutable Root<'lifetime, T> is not at risk
+//
+// Thus the fix to preventing roots escaping is to make all data structures provide a root-based API
+//
+// The interior mutability pattern must be strictly adhered to. Is there a way to enforce???
+//
+// TODO: arena for reference counted input/output pointers
+
 use libc::getcontext;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -126,20 +136,20 @@ impl<'memory> HeapItem<'memory> {
 }
 
 ///////////////////////
-struct MemoryInner<'memory> {
-    objects: BTreeMap<usize, HeapItem<'memory>>,
+struct MemoryInner<'heap> {
+    objects: BTreeMap<usize, HeapItem<'heap>>,
     scan: Vec<StackItem>,
 }
 
 ///////////////////////
-struct Memory<'memory> {
-    inner: RefCell<MemoryInner<'memory>>,
+struct Memory<'heap> {
+    inner: RefCell<MemoryInner<'heap>>,
     base: usize,
 }
 
-impl<'memory> Memory<'memory> {
-    fn new() -> Memory<'memory> {
-        let inner = MemoryInner::<'memory> {
+impl<'heap> Memory<'heap> {
+    fn new() -> Memory<'heap> {
+        let inner = MemoryInner::<'heap> {
             objects: BTreeMap::new(),
             scan: Vec::new(),
         };
@@ -149,7 +159,7 @@ impl<'memory> Memory<'memory> {
         }
     }
 
-    fn alloc<T: Trace + 'memory>(&self, object: T) -> Gc<T> {
+    fn alloc_raw<T: Trace + 'heap>(&self, object: T) -> Gc<T> {
         let obj: Box<T> = Box::new(object);
         let raw_ptr = &*obj as *const T;
         let addr = raw_ptr.addr();
@@ -162,6 +172,10 @@ impl<'memory> Memory<'memory> {
 
         println!("(alloc) {:x}", addr);
         Gc::new(raw_ptr)
+    }
+
+    fn alloc<'mem, T: Trace + 'heap>(&'mem self, value: T) -> Root<'mem, T> {
+        Root::new(self.alloc_raw(value))
     }
 
     fn scan(&self) {
@@ -248,17 +262,17 @@ impl<'memory> Memory<'memory> {
         self.collect();
     }
 
-    fn enter<'guard, F>(&'guard self, run: F)
+    fn enter<'mutator, F>(&'mutator self, mutant: F)
     where
-        F: FnOnce(&MutatorView<'memory, 'guard>),
-        'memory: 'guard,
+        F: FnOnce(&MutatorView<'heap, 'mutator>),
+        //'heap: 'mutator,
     {
         let delegate = MutatorView::new(self);
-        run(&delegate);
+        mutant(&delegate);
     }
 }
 
-impl<'memory> Drop for Memory<'memory> {
+impl<'heap> Drop for Memory<'heap> {
     fn drop(&mut self) {
         let mut inner = self.inner.borrow_mut();
 
@@ -272,32 +286,20 @@ impl<'memory> Drop for Memory<'memory> {
 }
 
 ///////////////////////
-trait MutatorScope {}
-
-///////////////////////
-struct MutatorView<'memory, 'guard> {
-    mem: &'guard Memory<'memory>,
+struct MutatorView<'heap, 'mutator> {
+    mem: &'mutator Memory<'heap>,
 }
 
-impl<'memory, 'guard> MutatorScope for MutatorView<'memory, 'guard> {}
-
-impl<'memory, 'guard> MutatorView<'memory, 'guard> {
-    fn new(mem: &'guard Memory<'memory>) -> Self {
-        MutatorView::<'memory, 'guard> { mem }
+impl<'heap, 'mutator> MutatorView<'heap, 'mutator> {
+    fn new(mem: &'mutator Memory<'heap>) -> Self {
+        MutatorView { mem }
     }
 
-    fn alloc_raw<T: 'memory>(&self, value: T) -> Gc<T>
+    fn alloc<'mem, T: Trace + 'heap>(&'mem self, value: T) -> Root<'mem, T>
     where
         T: Trace,
     {
         self.mem.alloc(value)
-    }
-
-    fn alloc<T: 'memory>(&self, value: T) -> Root<'memory, T>
-    where
-        T: Trace,
-    {
-        Root::new(self.alloc_raw(value))
     }
 
     fn gc(&self) {
@@ -306,13 +308,13 @@ impl<'memory, 'guard> MutatorView<'memory, 'guard> {
 }
 
 ///////////////////////
-struct Root<'guard, T: Trace> {
+struct Root<'root, T: Trace> {
     var: Gc<T>,
-    p: PhantomData<&'guard T>,
+    p: PhantomData<&'root T>,
 }
 
-impl<'guard, T: Trace> Root<'guard, T> {
-    fn new(var: Gc<T>) -> Root<'guard, T> {
+impl<'root, T: Trace> Root<'root, T> {
+    fn new(var: Gc<T>) -> Root<'root, T> {
         Root {
             var,
             p: PhantomData,
@@ -324,7 +326,7 @@ impl<'guard, T: Trace> Root<'guard, T> {
     }
 }
 
-impl<'guard, T: Trace> Deref for Root<'guard, T> {
+impl<'root, T: Trace> Deref for Root<'root, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         unsafe { self.var.as_ref() }
@@ -343,67 +345,34 @@ fn test_do_some_stuff(mem: &MutatorView) {
     println!("test_do_some_stuff");
 }
 
-fn test_do_all_stuff(mem: &MutatorView) {
-    let foo = mem.alloc(HeapString::from("foosball"));
-
-    for _ in 0x0..0xF {
-        let _bar = mem.alloc(HeapString::from("foobar"));
-    }
-    mem.gc();
-
-    test_do_some_stuff(mem);
-
-    foo.debug();
-    foo.print();
-
-    let bar = mem.alloc(HeapString::from("barbell"));
-    bar.debug();
-
-    mem.gc();
-}
-
 fn main() {
-    let arena = Memory::new();
+    // let mut escapees = Vec::new();
+    {
+        let arena = Memory::new();
 
-    //arena.enter(test_do_all_stuff);
+        arena.enter(|mem| {
+            let foo = mem.alloc(HeapString::from("foosball"));
 
-    // Regarding pinning...
-    //
-    // - mutable variables can be std::mem::replace()'d etc
-    // - immutable variables can not
-    //
-    // Pinning requires shadowing every root to hold it in place
-    //
-    // - the assumption is that a root might escape from its scope
-    // - The Gc<T> type is most at risk of being escaped by being stored somewhere that can escape
-    // - An immutable Root<'lifetime, T> is not at risk
-    //
-    // Thus the fix to preventing roots escaping is to make all data structures provide a root-based API
-    //
-    // The interior mutability pattern must be strictly adhered to. Is there a way to enforce???
-    //
-    // TODO: arena for reference counted input/output pointers
+            for _ in 0x0..0xF {
+                let _bar = mem.alloc(HeapString::from("foobar"));
+            }
+            mem.gc();
 
-    let mut escapees = Vec::new();
+            test_do_some_stuff(mem);
 
-    arena.enter(|mem| {
-        let foo = mem.alloc(HeapString::from("foosball"));
+            foo.debug();
+            foo.print();
 
-        for _ in 0x0..0xF {
-            let _bar = mem.alloc(HeapString::from("foobar"));
-        }
-        mem.gc();
+            let bar = mem.alloc(HeapString::from("barbell"));
+            bar.debug();
 
-        test_do_some_stuff(mem);
+            mem.gc();
 
-        foo.debug();
-        foo.print();
+            //escapees.push(foo);
+        });
+    }
 
-        let bar = mem.alloc(HeapString::from("barbell"));
-        bar.debug();
-
-        mem.gc();
-
-        escapees.push(foo);
-    });
+    // for item in escapees.iter() {
+    //     item.print();
+    // }
 }
