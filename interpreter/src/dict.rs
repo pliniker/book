@@ -331,148 +331,96 @@ impl Print for Dict {
 #[cfg(test)]
 mod test {
     use super::{Container, Dict, HashIndexedAnyContainer};
-    use crate::error::{ErrorKind, RuntimeError};
-    use crate::memory::{Memory, Mutator, MutatorView};
+    use crate::error::ErrorKind;
+    use crate::memory::Memory;
     use crate::pair::Pair;
 
     #[test]
     fn dict_empty_assoc_lookup() {
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::new();
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let key = mem.lookup_sym("foo");
+            let val = mem.lookup_sym("bar");
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::new();
+            dict.assoc(mem, key, val)?;
 
-                let key = mem.lookup_sym("foo");
-                let val = mem.lookup_sym("bar");
+            let lookup = dict.lookup(mem, key)?;
 
-                dict.assoc(mem, key, val)?;
+            assert!(lookup == val);
 
-                let lookup = dict.lookup(mem, key)?;
-
-                assert!(lookup == val);
-
-                Ok(())
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn dict_assoc_lookup() {
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 256)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let key = mem.lookup_sym("foo");
+            let val = mem.lookup_sym("bar");
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 256)?;
+            dict.assoc(mem, key, val)?;
 
-                let key = mem.lookup_sym("foo");
-                let val = mem.lookup_sym("bar");
+            let lookup = dict.lookup(mem, key)?;
 
-                dict.assoc(mem, key, val)?;
+            assert!(lookup == val);
 
-                let lookup = dict.lookup(mem, key)?;
-
-                assert!(lookup == val);
-
-                Ok(())
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn dict_lookup_fail() {
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 256)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let key = mem.lookup_sym("foo");
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 256)?;
+            let lookup = dict.lookup(mem, key);
 
-                let key = mem.lookup_sym("foo");
-
-                let lookup = dict.lookup(mem, key);
-
-                match lookup {
-                    Ok(_) => panic!("Key should not have been found!"),
-                    Err(e) => assert!(*e.error_kind() == ErrorKind::KeyError),
-                }
-
-                Ok(())
+            match lookup {
+                Ok(_) => panic!("Key should not have been found!"),
+                Err(e) => assert!(*e.error_kind() == ErrorKind::KeyError),
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn dict_dissoc_lookup() {
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 256)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let key = mem.lookup_sym("foo");
+            let val = mem.lookup_sym("bar");
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 256)?;
+            dict.assoc(mem, key, val)?;
 
-                let key = mem.lookup_sym("foo");
-                let val = mem.lookup_sym("bar");
+            let value = dict.lookup(mem, key)?;
+            assert!(value == val);
 
-                dict.assoc(mem, key, val)?;
+            let value = dict.dissoc(mem, key)?;
+            assert!(value == val);
 
-                let value = dict.lookup(mem, key)?;
-                assert!(value == val);
-
-                let value = dict.dissoc(mem, key)?;
-                assert!(value == val);
-
-                let result = dict.lookup(mem, key);
-                match result {
-                    Ok(_) => panic!("Key should not have been found!"),
-                    Err(e) => assert!(*e.error_kind() == ErrorKind::KeyError),
-                }
-
-                Ok(())
+            let result = dict.lookup(mem, key);
+            match result {
+                Ok(_) => panic!("Key should not have been found!"),
+                Err(e) => assert!(*e.error_kind() == ErrorKind::KeyError),
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -480,98 +428,72 @@ mod test {
         // this test should not require resizing the internal array, so should simply test that
         // find_entry() is returning a valid entry for all inserted items
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 100)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            for num in 0..50 {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 100)?;
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
 
-                for num in 0..50 {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    dict.assoc(mem, key, val)?;
-                }
-
-                for num in 0..50 {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    assert!(dict.exists(mem, key)?);
-
-                    let lookup = dict.lookup(mem, key)?;
-
-                    assert!(lookup == val);
-                }
-
-                Ok(())
+                dict.assoc(mem, key, val)?;
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            for num in 0..50 {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
+
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
+
+                assert!(dict.exists(mem, key)?);
+
+                let lookup = dict.lookup(mem, key)?;
+
+                assert!(lookup == val);
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn dict_assoc_lookup_500_into_capacity_20() {
         // this test forces several resizings and should test the final state of the dict is as expected
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 20)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            for num in 0..500 {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 20)?;
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
 
-                for num in 0..500 {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    dict.assoc(mem, key, val)?;
-                }
-
-                for num in 0..500 {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    assert!(dict.exists(mem, key)?);
-
-                    let lookup = dict.lookup(mem, key)?;
-
-                    assert!(lookup == val);
-                }
-
-                Ok(())
+                dict.assoc(mem, key, val)?;
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            for num in 0..500 {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
+
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
+
+                assert!(dict.exists(mem, key)?);
+
+                let lookup = dict.lookup(mem, key)?;
+
+                assert!(lookup == val);
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -579,104 +501,78 @@ mod test {
         // this test should not require resizing the internal array, so should simply test that
         // find_entry() is returning a valid entry for all inserted items
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 100)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            for num in 0..50 {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 100)?;
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
 
-                for num in 0..50 {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    dict.assoc(mem, key, val)?;
-                }
-
-                // delete every other key
-                for num in (0..50).step_by(2) {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-                    dict.dissoc(mem, key)?;
-                }
-
-                // add more stuff
-                for num in 0..20 {
-                    let key_name = format!("ignore_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    dict.assoc(mem, key, val)?;
-                }
-
-                // check that the originally inserted keys are discoverable or not as expected
-                for num in 0..50 {
-                    let key_name = format!("foo_{}", num);
-                    let key = mem.lookup_sym(&key_name);
-
-                    let val_name = format!("val_{}", num);
-                    let val = mem.lookup_sym(&val_name);
-
-                    if num % 2 == 0 {
-                        assert!(!dict.exists(mem, key)?);
-                    } else {
-                        assert!(dict.exists(mem, key)?);
-                        let lookup = dict.lookup(mem, key)?;
-                        assert!(lookup == val);
-                    }
-                }
-
-                Ok(())
+                dict.assoc(mem, key, val)?;
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            // delete every other key
+            for num in (0..50).step_by(2) {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
+                dict.dissoc(mem, key)?;
+            }
+
+            // add more stuff
+            for num in 0..20 {
+                let key_name = format!("ignore_{}", num);
+                let key = mem.lookup_sym(&key_name);
+
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
+
+                dict.assoc(mem, key, val)?;
+            }
+
+            // check that the originally inserted keys are discoverable or not as expected
+            for num in 0..50 {
+                let key_name = format!("foo_{}", num);
+                let key = mem.lookup_sym(&key_name);
+
+                let val_name = format!("val_{}", num);
+                let val = mem.lookup_sym(&val_name);
+
+                if num % 2 == 0 {
+                    assert!(!dict.exists(mem, key)?);
+                } else {
+                    assert!(dict.exists(mem, key)?);
+                    let lookup = dict.lookup(mem, key)?;
+                    assert!(lookup == val);
+                }
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn dict_unhashable() {
         let mem = Memory::new();
+        mem.enter(|mem| {
+            let dict = Dict::with_capacity(mem, 256)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            // a Pair type does not implement Hashable
+            let key = mem.alloc_tagged(Pair::new())?;
+            let val = mem.lookup_sym("bar");
 
-            fn run(
-                &self,
-                mem: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let dict = Dict::with_capacity(mem, 256)?;
+            let result = dict.assoc(mem, key, val);
 
-                // a Pair type does not implement Hashable
-                let key = mem.alloc_tagged(Pair::new())?;
-                let val = mem.lookup_sym("bar");
-
-                let result = dict.assoc(mem, key, val);
-
-                match result {
-                    Ok(_) => panic!("Key should not have been found!"),
-                    Err(e) => assert!(*e.error_kind() == ErrorKind::UnhashableError),
-                }
-
-                Ok(())
+            match result {
+                Ok(_) => panic!("Key should not have been found!"),
+                Err(e) => assert!(*e.error_kind() == ErrorKind::UnhashableError),
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 }

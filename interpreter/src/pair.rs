@@ -225,27 +225,11 @@ pub fn values_from_3_pairs<'guard>(
 mod test {
     use super::*;
     use crate::error::RuntimeError;
-    use crate::memory::{Memory, Mutator, MutatorView};
+    use crate::memory::{Memory, MutatorView};
 
     fn test_helper(test_fn: fn(&MutatorView) -> Result<(), RuntimeError>) {
         let mem = Memory::new();
-
-        struct Test {}
-        impl Mutator for Test {
-            type Input = fn(&MutatorView) -> Result<(), RuntimeError>;
-            type Output = ();
-
-            fn run(
-                &self,
-                mem: &MutatorView,
-                test_fn: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                test_fn(mem)
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, test_fn).unwrap();
+        mem.enter(test_fn).unwrap();
     }
 
     #[test]

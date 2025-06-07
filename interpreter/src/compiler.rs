@@ -866,7 +866,7 @@ pub fn compile<'guard>(
 #[cfg(test)]
 mod integration {
     use super::*;
-    use crate::memory::{Memory, Mutator};
+    use crate::memory::Memory;
     use crate::parser::parse;
     use crate::vm::Thread;
 
@@ -884,23 +884,7 @@ mod integration {
 
     fn test_helper(test_fn: fn(&MutatorView) -> Result<(), RuntimeError>) {
         let mem = Memory::new();
-
-        struct Test {}
-        impl Mutator for Test {
-            type Input = fn(&MutatorView) -> Result<(), RuntimeError>;
-            type Output = ();
-
-            fn run(
-                &self,
-                mem: &MutatorView,
-                test_fn: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                test_fn(mem)
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, test_fn).unwrap();
+        mem.enter(test_fn).unwrap();
     }
 
     #[test]

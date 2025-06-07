@@ -137,15 +137,6 @@ impl Memory {
         Memory { heap: Heap::new() }
     }
 
-    /// Run a mutator process
-    // TODO remove this function
-    // ANCHOR: DefMemoryMutate
-    pub fn mutate<M: Mutator>(&self, m: &M, input: M::Input) -> Result<M::Output, RuntimeError> {
-        let mut guard = MutatorView::new(self);
-        m.run(&mut guard, input)
-    }
-    // ANCHOR_END: DefMemoryMutate
-
     /// Enter a scope within which memory can be accessed.
     /// Nothing should escape from this scope.
     // ANCHOR: DefMemoryEnter
@@ -158,17 +149,3 @@ impl Memory {
     }
     // ANCHOR_END: DefMemoryEnter
 }
-
-/// Defines the interface a heap-mutating type must use to be allowed access to the heap
-// TODO remove this trait
-// ANCHOR: DefMutator
-pub trait Mutator: Sized {
-    type Input;
-    type Output;
-
-    fn run(&self, mem: &MutatorView, input: Self::Input) -> Result<Self::Output, RuntimeError>;
-
-    // TODO
-    // function to return iterator that iterates over roots
-}
-// ANCHOR_END: DefMutator

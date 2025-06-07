@@ -15,27 +15,14 @@ interpreter in Rust including:
 From CPython to Ruby's YARV, V8 and SpiderMonkey, GHC to the JVM, most language
 runtimes are written in C/C++.
 
-We believe that Rust is eminently suitable for implementing languages and can
-provide significant productivity improvements over C and C++ while retaining
-the performance advantages and low level control of both.
+Rust is eminently suitable for implementing languages and can provide
+significant productivity improvements over C and C++ while retaining the
+performance advantages and low level control of both through safe and unsafe
+abstractions.
 
-While there are a number of languages implemented in Rust available now, in
-varying states of completeness - interpreters, AOT compilers and
-JIT-compiled - our vision is singular:
-
-_To create a well documented reference compiler and runtime,
-permissively licensed, such that you can fork and morph it into your own
-programming language._
-
-That is, a platform for bootstrapping other languages, written in Rust.
-To that end, the implementation provided here is not intended to be feature
-complete and cannot possibly represent every variation of programming
-language or local optimization.
-
-It is a lofty goal, and it certainly won't be the right approach for
-everybody. However, we hope it will help shift the landscape in favor of more
-memory-safe language implementations.
-
+The goal of this book is to provide well documented compiler and runtime
+building blocks as a reference for learning how to build your own. The code is
+permissively licensed and thus may be forked and modified as desired.
 
 ## Getting involved
 

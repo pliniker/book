@@ -25,7 +25,7 @@ Depends on:
 
 ## Tracing
 
-Precise object scanning.
+Precise object scanning. OR could it be conservative?
 
 This _just_ needs:
  - pointer values, not any hard data on types
@@ -44,7 +44,6 @@ Safety:
 ## Main interface
 
 - Remove the unsafe `Mutator` trait
-- Redefine as a main `Thread` that is provided on entry
 
 ---
 

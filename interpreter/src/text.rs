@@ -82,92 +82,52 @@ impl Hashable for Text {
 #[cfg(test)]
 mod test {
     use super::Text;
-    use crate::error::RuntimeError;
-    use crate::memory::{Memory, Mutator, MutatorView};
+    use crate::memory::Memory;
 
     #[test]
     fn text_empty_string() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let text = Text::new_empty();
+            assert!(text.as_str(view) == "");
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
-
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let text = Text::new_empty();
-                assert!(text.as_str(view) == "");
-
-                Ok(())
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn text_from_static_str() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let expected = "こんにちは";
+            let text = Text::new_from_str(view, expected)?;
+            let got = text.as_str(view);
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            assert!(got == expected);
 
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let expected = "こんにちは";
-                let text = Text::new_from_str(view, expected)?;
-                let got = text.as_str(view);
-
-                assert!(got == expected);
-
-                Ok(())
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn value_from_string() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let input = String::from("こんにちは");
+            // the Value representation of the object is wrapped in quotes
+            let expected = format!("\"{}\"", input);
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let text = Text::new_from_str(view, &input)?;
+            let heap_text = view.alloc_tagged(text)?;
 
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let input = String::from("こんにちは");
-                // the Value representation of the object is wrapped in quotes
-                let expected = format!("\"{}\"", input);
+            let got = format!("{}", heap_text.value());
 
-                let text = Text::new_from_str(view, &input)?;
-                let heap_text = view.alloc_tagged(text)?;
+            assert!(got == expected);
 
-                let got = format!("{}", heap_text.value());
-
-                assert!(got == expected);
-
-                Ok(())
-            }
-        }
-
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 }

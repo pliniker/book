@@ -557,8 +557,8 @@ mod test {
         AnyContainerFromPairList, Array, Container, IndexedAnyContainer, IndexedContainer,
         StackAnyContainer, StackContainer,
     };
-    use crate::error::{ErrorKind, RuntimeError};
-    use crate::memory::{Memory, Mutator, MutatorView};
+    use crate::error::ErrorKind;
+    use crate::memory::Memory;
     use crate::pair::Pair;
     use crate::safeptr::TaggedCellPtr;
     use crate::taggedptr::Value;
@@ -566,200 +566,135 @@ mod test {
     #[test]
     fn array_generic_push_and_pop() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let array: Array<i64> = Array::new();
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
-
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let array: Array<i64> = Array::new();
-
-                // TODO StickyImmixHeap will only allocate up to 32k at time of writing
-                // test some big array sizes
-                for i in 0..1000 {
-                    array.push(view, i)?;
-                }
-
-                for i in 0..1000 {
-                    assert!(array.pop(view)? == 999 - i);
-                }
-
-                Ok(())
+            // TODO StickyImmixHeap will only allocate up to 32k at time of writing
+            // test some big array sizes
+            for i in 0..1000 {
+                array.push(view, i)?;
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            for i in 0..1000 {
+                assert!(array.pop(view)? == 999 - i);
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn array_generic_indexing() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let array: Array<i64> = Array::new();
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
-
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let array: Array<i64> = Array::new();
-
-                for i in 0..12 {
-                    array.push(view, i)?;
-                }
-
-                assert!(array.get(view, 0) == Ok(0));
-                assert!(array.get(view, 4) == Ok(4));
-
-                for i in 12..1000 {
-                    match array.get(view, i) {
-                        Ok(_) => panic!("Array index should have been out of bounds!"),
-                        Err(e) => assert!(*e.error_kind() == ErrorKind::BoundsError),
-                    }
-                }
-
-                Ok(())
+            for i in 0..12 {
+                array.push(view, i)?;
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            assert!(array.get(view, 0) == Ok(0));
+            assert!(array.get(view, 4) == Ok(4));
+
+            for i in 12..1000 {
+                match array.get(view, i) {
+                    Ok(_) => panic!("Array index should have been out of bounds!"),
+                    Err(e) => assert!(*e.error_kind() == ErrorKind::BoundsError),
+                }
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn arrayany_tagged_pointers() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let array: Array<TaggedCellPtr> = Array::new();
+            let array = view.alloc(array)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
-
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let array: Array<TaggedCellPtr> = Array::new();
-                let array = view.alloc(array)?;
-
-                for _ in 0..12 {
-                    StackAnyContainer::push(&*array, view, view.nil())?;
-                }
-
-                // or by copy/clone
-                let pair = view.alloc_tagged(Pair::new())?;
-
-                IndexedAnyContainer::set(&*array, view, 3, pair)?;
-
-                Ok(())
+            for _ in 0..12 {
+                StackAnyContainer::push(&*array, view, view.nil())?;
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            // or by copy/clone
+            let pair = view.alloc_tagged(Pair::new())?;
+
+            IndexedAnyContainer::set(&*array, view, 3, pair)?;
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn array_with_capacity_and_realloc() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let array: Array<TaggedCellPtr> = Array::with_capacity(view, 256)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let ptr_before = array.data.get().as_ptr();
 
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let array: Array<TaggedCellPtr> = Array::with_capacity(view, 256)?;
-
-                let ptr_before = array.data.get().as_ptr();
-
-                // fill to capacity
-                for _ in 0..256 {
-                    StackAnyContainer::push(&array, view, view.nil())?;
-                }
-
-                let ptr_after = array.data.get().as_ptr();
-
-                // array storage shouldn't have been reallocated
-                assert!(ptr_before == ptr_after);
-
-                // overflow capacity, requiring reallocation
+            // fill to capacity
+            for _ in 0..256 {
                 StackAnyContainer::push(&array, view, view.nil())?;
-
-                let ptr_realloc = array.data.get().as_ptr();
-
-                // array storage should have been reallocated
-                assert!(ptr_before != ptr_realloc);
-
-                Ok(())
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            let ptr_after = array.data.get().as_ptr();
+
+            // array storage shouldn't have been reallocated
+            assert!(ptr_before == ptr_after);
+
+            // overflow capacity, requiring reallocation
+            StackAnyContainer::push(&array, view, view.nil())?;
+
+            let ptr_realloc = array.data.get().as_ptr();
+
+            // array storage should have been reallocated
+            assert!(ptr_before != ptr_realloc);
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn arrayany_from_pair_list() {
         let mem = Memory::new();
+        mem.enter(|view| {
+            let array: Array<TaggedCellPtr> = Array::new();
+            let array = view.alloc(array)?;
 
-        struct Test {}
-        impl Mutator for Test {
-            type Input = ();
-            type Output = ();
+            let pair = Pair::new();
+            pair.first.set(view.lookup_sym("thing0"));
 
-            fn run(
-                &self,
-                view: &MutatorView,
-                _input: Self::Input,
-            ) -> Result<Self::Output, RuntimeError> {
-                let array: Array<TaggedCellPtr> = Array::new();
-                let array = view.alloc(array)?;
+            let head = view.alloc_tagged(pair)?;
+            let mut tail = head;
 
-                let pair = Pair::new();
-                pair.first.set(view.lookup_sym("thing0"));
-
-                let head = view.alloc_tagged(pair)?;
-                let mut tail = head;
-
-                for n in 1..12 {
-                    if let Value::Pair(pair) = *tail {
-                        tail = pair.append(view, view.lookup_sym(&format!("thing{}", n)))?;
-                    } else {
-                        panic!("expected pair!")
-                    }
+            for n in 1..12 {
+                if let Value::Pair(pair) = *tail {
+                    tail = pair.append(view, view.lookup_sym(&format!("thing{}", n)))?;
+                } else {
+                    panic!("expected pair!")
                 }
-
-                array.from_pair_list(view, head)?;
-
-                for n in 0..12 {
-                    let thing = IndexedAnyContainer::get(&*array, view, n)?;
-
-                    match *thing {
-                        Value::Symbol(s) => assert!(s.as_str(view) == format!("thing{}", n)),
-                        _ => panic!("expected symbol!"),
-                    }
-                }
-
-                Ok(())
             }
-        }
 
-        let test = Test {};
-        mem.mutate(&test, ()).unwrap();
+            array.from_pair_list(view, head)?;
+
+            for n in 0..12 {
+                let thing = IndexedAnyContainer::get(&*array, view, n)?;
+
+                match *thing {
+                    Value::Symbol(s) => assert!(s.as_str(view) == format!("thing{}", n)),
+                    _ => panic!("expected symbol!"),
+                }
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 }
