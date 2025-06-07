@@ -141,6 +141,7 @@ pub struct TaggedScopedPtr<'guard> {
 // ANCHOR_END: DefTaggedScopedPtr
 
 impl<'guard> TaggedScopedPtr<'guard> {
+    // XXX: this should be unsafe - no guarantees that `ptr` is a valid pointer
     pub fn new(guard: &'guard dyn MutatorScope, ptr: TaggedPtr) -> TaggedScopedPtr<'guard> {
         TaggedScopedPtr {
             ptr,
@@ -218,6 +219,7 @@ impl TaggedCellPtr {
         }
     }
 
+    // XXX: this should be unsafe - no guarantee that the source object is valid
     pub fn new_ptr(source: TaggedPtr) -> TaggedCellPtr {
         TaggedCellPtr {
             inner: Cell::new(source),
@@ -262,6 +264,7 @@ impl TaggedCellPtr {
     /// Set this pointer to another TaggedPtr
     // TODO DEPRECATE IF POSSIBLE
     //  - this is only used to set non-object tagged values and should be replaced/renamed
+    // XXX: this should be unsafe
     pub fn set_to_ptr<'guard>(&self, _guard: &'guard dyn MutatorScope, ptr: TaggedPtr) {
         self.inner.set(ptr)
     }

@@ -265,7 +265,6 @@ impl<'heap> Memory<'heap> {
     fn enter<'mutator, F>(&'mutator self, mutant: F)
     where
         F: FnOnce(&MutatorView<'heap, 'mutator>),
-        //'heap: 'mutator,
     {
         let delegate = MutatorView::new(self);
         mutant(&delegate);
@@ -295,10 +294,7 @@ impl<'heap, 'mutator> MutatorView<'heap, 'mutator> {
         MutatorView { mem }
     }
 
-    fn alloc<'mem, T: Trace + 'heap>(&'mem self, value: T) -> Root<'mem, T>
-    where
-        T: Trace,
-    {
+    fn alloc<'mem, T: Trace + 'heap>(&'mem self, value: T) -> Root<'mem, T> {
         self.mem.alloc(value)
     }
 
@@ -346,29 +342,36 @@ fn test_do_some_stuff(mem: &MutatorView) {
 }
 
 fn main() {
-    // let mut escapees = Vec::new();
+    // let mut escapees_outer = Vec::new();
     {
         let arena = Memory::new();
+        // let mut escapees_inner = Vec::new();
 
         arena.enter(|mem| {
+            // under some circumstances, `foo` is placed earlier on the stack than `arena`.
+            // This causes stack scanning to miss its presence and collect it, causing
+            // use after free further on.
+            // This never happens if all the below is in a function rather than a closure.
             let foo = mem.alloc(HeapString::from("foosball"));
 
             for _ in 0x0..0xF {
-                let _bar = mem.alloc(HeapString::from("foobar"));
+                let bar = mem.alloc(HeapString::from("foobar"));
+                // bar.debug();
             }
             mem.gc();
 
             test_do_some_stuff(mem);
-
-            foo.debug();
-            foo.print();
 
             let bar = mem.alloc(HeapString::from("barbell"));
             bar.debug();
 
             mem.gc();
 
-            //escapees.push(foo);
+            foo.debug();
+            foo.print();
+
+            // escapees_inner.push(foo);
+            // escapees_outer.push(bar);
         });
     }
 

@@ -138,15 +138,29 @@ impl Memory {
     }
 
     /// Run a mutator process
+    // TODO remove this function
     // ANCHOR: DefMemoryMutate
     pub fn mutate<M: Mutator>(&self, m: &M, input: M::Input) -> Result<M::Output, RuntimeError> {
         let mut guard = MutatorView::new(self);
         m.run(&mut guard, input)
     }
     // ANCHOR_END: DefMemoryMutate
+
+    /// Enter a scope within which memory can be accessed.
+    /// Nothing should escape from this scope.
+    // ANCHOR: DefMemoryEnter
+    pub fn enter<F>(&self, f: F) -> Result<(), RuntimeError>
+    where
+        F: Fn(&MutatorView) -> Result<(), RuntimeError>,
+    {
+        let guard = MutatorView::new(&self);
+        f(&guard)
+    }
+    // ANCHOR_END: DefMemoryEnter
 }
 
 /// Defines the interface a heap-mutating type must use to be allowed access to the heap
+// TODO remove this trait
 // ANCHOR: DefMutator
 pub trait Mutator: Sized {
     type Input;

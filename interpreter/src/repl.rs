@@ -1,94 +1,126 @@
 use crate::compiler::compile;
 use crate::error::{ErrorKind, RuntimeError};
-use crate::memory::{Mutator, MutatorView};
+use crate::memory::MutatorView;
 use crate::parser::parse;
-use crate::safeptr::{CellPtr, TaggedScopedPtr};
+use crate::safeptr::TaggedScopedPtr;
 use crate::vm::{EvalStatus, Thread};
 
-/// A mutator that returns a Repl instance
-pub struct RepMaker {}
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
-impl Mutator for RepMaker {
-    type Input = ();
-    type Output = ReadEvalPrint;
-
-    fn run(&self, mem: &MutatorView, _input: ()) -> Result<ReadEvalPrint, RuntimeError> {
-        ReadEvalPrint::alloc(mem)
+fn get_or_create_history(filename: &str) -> Option<String> {
+    match dirs::home_dir() {
+        Some(mut path) => {
+            path.push(filename);
+            Some(String::from(path.to_str().unwrap()))
+        }
+        None => None,
     }
 }
 
-/// Mutator that implements the VM
-pub struct ReadEvalPrint {
-    main_thread: CellPtr<Thread>,
-}
+fn get_reader(history_file: &Option<String>) -> Editor<()> {
+    // () means no completion support (TODO)
+    // TODO - find a more suitable alternative to rustyline
+    let mut reader = Editor::<()>::new();
 
-impl ReadEvalPrint {
-    pub fn alloc(mem: &MutatorView) -> Result<ReadEvalPrint, RuntimeError> {
-        Ok(ReadEvalPrint {
-            main_thread: CellPtr::new_with(Thread::alloc(mem)?),
-        })
+    // Try to load the repl history file
+    if let Some(ref path) = history_file {
+        if let Err(err) = reader.load_history(&path) {
+            eprintln!("Could not read history: {}", err);
+        }
     }
+
+    reader
 }
 
-impl Mutator for ReadEvalPrint {
-    type Input = String;
-    type Output = ();
+fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<(), RuntimeError> {
+    // If the first 2 chars of the line are ":d", then the user has requested a debug
+    // representation
+    let (line, debug) = if line.starts_with(":d ") {
+        (&line[3..], true)
+    } else {
+        (line.as_str(), false)
+    };
 
-    fn run(&self, mem: &MutatorView, line: String) -> Result<(), RuntimeError> {
-        let thread = self.main_thread.get(mem);
+    match (|mem, line| -> Result<TaggedScopedPtr, RuntimeError> {
+        let value = parse(mem, line)?;
 
-        // If the first 2 chars of the line are ":d", then the user has requested a debug
-        // representation
-        let (line, debug) = if line.starts_with(":d ") {
-            (&line[3..], true)
-        } else {
-            (line.as_str(), false)
+        if debug {
+            println!(
+                "# Debug\n## Input:\n```\n{}\n```\n## Parsed:\n```\n{:?}\n```",
+                line, value
+            );
+        }
+
+        let function = compile(mem, value)?;
+
+        if debug {
+            println!("## Compiled:\n```\n{:?}\n```", function);
+        }
+
+        let mut status = thread.start_exec(mem, function)?;
+        let value = loop {
+            match status {
+                EvalStatus::Return(value) => break value,
+                _ => status = thread.continue_exec(mem, 1024)?,
+            };
         };
 
-        match (|mem, line| -> Result<TaggedScopedPtr, RuntimeError> {
-            let value = parse(mem, line)?;
+        if debug {
+            println!("## Evaluated:\n```\n{:?}\n```\n", value);
+        }
 
-            if debug {
-                println!(
-                    "# Debug\n## Input:\n```\n{}\n```\n## Parsed:\n```\n{:?}\n```",
-                    line, value
-                );
+        Ok(value)
+    })(mem, &line)
+    {
+        Ok(value) => println!("{}", value),
+
+        Err(e) => {
+            match e.error_kind() {
+                // non-fatal repl errors
+                ErrorKind::LexerError(_) => e.print_with_source(&line),
+                ErrorKind::ParseError(_) => e.print_with_source(&line),
+                ErrorKind::EvalError(_) => e.print_with_source(&line),
+                _ => return Err(e),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn repl(mem: &MutatorView) -> Result<(), RuntimeError> {
+    let history_file = get_or_create_history(".evalrus.history");
+    let mut reader = get_reader(&history_file);
+
+    let main_thread = Thread::alloc(mem)?;
+
+    // repl
+    loop {
+        let readline = reader.readline("> ");
+
+        match readline {
+            // valid input
+            Ok(line) => {
+                reader.add_history_entry(&line);
+                interpret_line(mem, &main_thread, line)?;
             }
 
-            let function = compile(mem, value)?;
-
-            if debug {
-                println!("## Compiled:\n```\n{:?}\n```", function);
-            }
-
-            let mut status = thread.start_exec(mem, function)?;
-            let value = loop {
-                match status {
-                    EvalStatus::Return(value) => break value,
-                    _ => status = thread.continue_exec(mem, 1024)?,
-                };
-            };
-
-            if debug {
-                println!("## Evaluated:\n```\n{:?}\n```\n", value);
-            }
-
-            Ok(value)
-        })(mem, &line)
-        {
-            Ok(value) => println!("{}", value),
-
+            // some kind of program termination condition
             Err(e) => {
-                match e.error_kind() {
-                    // non-fatal repl errors
-                    ErrorKind::LexerError(_) => e.print_with_source(&line),
-                    ErrorKind::ParseError(_) => e.print_with_source(&line),
-                    ErrorKind::EvalError(_) => e.print_with_source(&line),
-                    _ => return Err(e),
+                if let Some(ref path) = history_file {
+                    reader.save_history(&path).unwrap_or_else(|err| {
+                        eprintln!("could not save input history in {}: {}", path, err);
+                    });
+                }
+
+                // EOF is fine
+                if let ReadlineError::Eof = e {
+                    return Ok(());
+                } else {
+                    return Err(RuntimeError::from(e));
                 }
             }
         }
-
-        Ok(())
     }
 }

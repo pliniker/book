@@ -7,15 +7,21 @@
 ## Rooting
 
 Conservative stack scanning.
-- allows for intrusive data structures
+- allows for intrusive data structures _where used_
 - simpler mutator root management
   - still need to use Pin to keep roots from escaping
+  - or do we? Interior mutability means roots only have to be readonly
+  - which means no mem::replace etc if we have a phantom lifetime
 - need to push all registers to stack
+  - how is this safely done? bdwgc endorses use of getcontext() or setjmp
+- need to find stack base
+  - pthread_attr_getstack
 
 Depends on:
 - fast map of pointer to block
   - vec + heap?
 - object map in each block
+  - FIRST step, implement object block
 
 ## Tracing
 
@@ -34,6 +40,13 @@ Safety:
  - no: we are dereferencing pointers to get other pointers
  - yes: we are not dereferencing pointers in safe rust
  - yes: we are using cell everywhere and no threading, so safe
+
+## Main interface
+
+- Remove the unsafe `Mutator` trait
+- Redefine as a main `Thread` that is provided on entry
+
+---
 
 ```rust
 pub trait Trace {
@@ -62,6 +75,11 @@ RawPtr::trace(&self) {}
 
 Root::trace()
 ```
+
+
+## Pinning Roots
+
+```rust
 use std::cell::RefCell;
 use std::marker::PhantomPinned;
 use std::ops::Deref;
@@ -216,3 +234,4 @@ fn main() {
         println!("{}", *foo);
     }
 }
+```
