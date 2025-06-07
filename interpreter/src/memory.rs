@@ -29,7 +29,7 @@ impl<'memory> MutatorView<'memory> {
     /// Get a Symbol pointer from its name
     // ANCHOR: DefMutatorViewLookupSym
     pub fn lookup_sym(&self, name: &str) -> TaggedScopedPtr<'_> {
-        TaggedScopedPtr::new(self, self.heap.lookup_sym(name))
+        unsafe { TaggedScopedPtr::new(self, self.heap.lookup_sym(name)) }
     }
     // ANCHOR_END: DefMutatorViewLookupSym
 
@@ -53,7 +53,7 @@ impl<'memory> MutatorView<'memory> {
         FatPtr: From<RawPtr<T>>,
         T: AllocObject<TypeList>,
     {
-        Ok(TaggedScopedPtr::new(self, self.heap.alloc_tagged(object)?))
+        Ok(unsafe { TaggedScopedPtr::new(self, self.heap.alloc_tagged(object)?) })
     }
     // ANCHOR_END: DefMutatorViewAllocTagged
 
@@ -64,7 +64,7 @@ impl<'memory> MutatorView<'memory> {
 
     /// Return a nil-initialized runtime-tagged pointer
     pub fn nil(&self) -> TaggedScopedPtr<'_> {
-        TaggedScopedPtr::new(self, TaggedPtr::nil())
+        TaggedScopedPtr::nil(self)
     }
 }
 

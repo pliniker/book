@@ -234,7 +234,7 @@ impl Thread {
 
         // Convert the location integer to a TaggedScopedPtr for passing
         // into the Thread's upvalues Dict
-        let location_ptr = TaggedScopedPtr::new(guard, TaggedPtr::number(location as isize));
+        let location_ptr = TaggedScopedPtr::number(guard, location as isize);
 
         // Lookup upvalue in upvalues dict
         match upvalues.lookup(guard, location_ptr) {
@@ -262,7 +262,7 @@ impl Thread {
                 let upvalues = self.upvalues.get(mem);
                 let upvalue = Upvalue::alloc(mem, location)?;
 
-                let location_ptr = TaggedScopedPtr::new(mem, TaggedPtr::number(location as isize));
+                let location_ptr = TaggedScopedPtr::number(mem, location as isize);
                 upvalues.assoc(mem, location_ptr, upvalue.as_tagged(mem))?;
 
                 Ok((location_ptr, upvalue))

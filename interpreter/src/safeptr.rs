@@ -49,10 +49,12 @@ impl<'guard, T: Sized> ScopedPtr<'guard, T> {
         FatPtr: From<RawPtr<T>>,
         T: AllocObject<TypeList>,
     {
-        TaggedScopedPtr::new(
-            guard,
-            TaggedPtr::from(FatPtr::from(RawPtr::new(self.value))),
-        )
+        unsafe {
+            TaggedScopedPtr::new(
+                guard,
+                TaggedPtr::from(FatPtr::from(RawPtr::new(self.value))),
+            )
+        }
     }
 }
 
@@ -141,11 +143,26 @@ pub struct TaggedScopedPtr<'guard> {
 // ANCHOR_END: DefTaggedScopedPtr
 
 impl<'guard> TaggedScopedPtr<'guard> {
-    // XXX: this should be unsafe - no guarantees that `ptr` is a valid pointer
-    pub fn new(guard: &'guard dyn MutatorScope, ptr: TaggedPtr) -> TaggedScopedPtr<'guard> {
+    // This is unsafe because there is no guarantees that `ptr` is a valid pointer
+    pub unsafe fn new(guard: &'guard dyn MutatorScope, ptr: TaggedPtr) -> TaggedScopedPtr<'guard> {
         TaggedScopedPtr {
             ptr,
             value: FatPtr::from(ptr).as_value(guard),
+        }
+    }
+
+    pub fn number(guard: &'guard dyn MutatorScope, num: isize) -> TaggedScopedPtr<'guard> {
+        let ptr_val = TaggedPtr::number(num);
+        TaggedScopedPtr {
+            ptr: ptr_val,
+            value: FatPtr::from(ptr_val).as_value(guard),
+        }
+    }
+
+    pub fn nil(guard: &'guard dyn MutatorScope) -> TaggedScopedPtr<'guard> {
+        TaggedScopedPtr {
+            ptr: TaggedPtr::nil(),
+            value: FatPtr::Nil.as_value(guard),
         }
     }
 
@@ -219,18 +236,11 @@ impl TaggedCellPtr {
         }
     }
 
-    // XXX: this should be unsafe - no guarantee that the source object is valid
-    pub fn new_ptr(source: TaggedPtr) -> TaggedCellPtr {
-        TaggedCellPtr {
-            inner: Cell::new(source),
-        }
-    }
-
     /// Return the pointer as a `TaggedScopedPtr` type that carries a copy of the `TaggedPtr` and
     /// a `Value` type for both copying and access convenience
     // ANCHOR: DefTaggedCellPtrGet
     pub fn get<'guard>(&self, guard: &'guard dyn MutatorScope) -> TaggedScopedPtr<'guard> {
-        TaggedScopedPtr::new(guard, self.inner.get())
+        unsafe { TaggedScopedPtr::new(guard, self.inner.get()) }
     }
     // ANCHOR_END: DefTaggedCellPtrGet
 
