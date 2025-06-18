@@ -41,9 +41,6 @@ Safety:
  - yes: we are not dereferencing pointers in safe rust
  - yes: we are using cell everywhere and no threading, so safe
 
-## Main interface
-
-- Remove the unsafe `Mutator` trait
 
 ---
 

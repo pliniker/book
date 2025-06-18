@@ -21,11 +21,14 @@ impl<T: Sized> RawPtr<T> {
     pub fn as_ptr(self) -> *const T {
         self.ptr.as_ptr()
     }
+
     /// Get the pointer value as a word-sized integer
-    pub fn as_word(self) -> usize {
+    pub fn addr(self) -> usize {
         self.ptr.as_ptr() as usize
     }
 
+    /// Get the pointer as a null-type value
+    // XXX: is this really needed? Any added benefit?
     pub fn as_untyped(self) -> NonNull<()> {
         self.ptr.cast()
     }
@@ -34,14 +37,6 @@ impl<T: Sized> RawPtr<T> {
     /// about the internal pointer's validity.
     pub unsafe fn as_ref(&self) -> &T {
         self.ptr.as_ref()
-    }
-
-    /// Get a `&mut` reference to the object. Unsafe because there are no guarantees at this level
-    /// about the internal pointer's validity.
-    /// In addition, there can be no compile-time guarantees of mutable aliasing prevention.
-    /// Use with caution!
-    pub unsafe fn as_mut_ref(&mut self) -> &mut T {
-        self.ptr.as_mut()
     }
 }
 

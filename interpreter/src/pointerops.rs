@@ -36,7 +36,7 @@ pub trait Tagged<T> {
 
 impl<T> Tagged<T> for RawPtr<T> {
     fn tag(self, tag: usize) -> NonNull<T> {
-        unsafe { NonNull::new_unchecked((self.as_word() | tag) as *mut T) }
+        unsafe { NonNull::new_unchecked((self.addr() | tag) as *mut T) }
     }
 
     fn untag(from: NonNull<T>) -> RawPtr<T> {
