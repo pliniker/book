@@ -6,7 +6,7 @@ use stickyimmix::{AllocObject, AllocRaw, ArraySize, RawPtr, StickyImmixHeap};
 
 use crate::error::RuntimeError;
 use crate::headers::{ObjectHeader, TypeList};
-use crate::pointerops::ScopedRef;
+use crate::pointerops::AsScopedRef;
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedScopedPtr};
 use crate::symbolmap::SymbolMap;
 use crate::taggedptr::{FatPtr, TaggedPtr};
@@ -68,7 +68,7 @@ impl<'memory> MutatorView<'memory> {
     }
 }
 
-impl<'memory> MutatorScope for MutatorView<'memory> {}
+impl MutatorScope for MutatorView<'_> {}
 
 /// The heap implementation
 // ANCHOR: DefHeapStorage
@@ -144,7 +144,7 @@ impl Memory {
     where
         F: Fn(&MutatorView) -> Result<(), RuntimeError>,
     {
-        let guard = MutatorView::new(&self);
+        let guard = MutatorView::new(self);
         f(&guard)
     }
     // ANCHOR_END: DefMemoryEnter

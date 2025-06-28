@@ -12,7 +12,8 @@ use crate::function::{Function, Partial};
 use crate::list::List;
 use crate::memory::MutatorView;
 use crate::pair::Pair;
-use crate::safeptr::{CellPtr, MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
+use crate::pointerops::AsScopedRef;
+use crate::safeptr::{AsScopedPtr, CellPtr, MutatorScope, RefPtr, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::{TaggedPtr, Value};
 
 pub const RETURN_REG: usize = 0;
@@ -40,7 +41,7 @@ pub struct CallFrame {
     base: ArraySize,
 }
 // ANCHOR_END: DefCallFrame
-
+ 
 impl CallFrame {
     /// Instantiate an outer-level call frame at the beginning of the stack
     pub fn new_main<'guard>(main_fn: ScopedPtr<'guard, Function>) -> CallFrame {
@@ -176,18 +177,18 @@ fn env_upvalue_lookup<'guard>(
 // ANCHOR: DefThread
 pub struct Thread {
     /// An array of CallFrames
-    frames: CellPtr<CallFrameList>,
+    frames: RefPtr<CallFrameList>,
     /// An array of pointers any object type
-    stack: CellPtr<List>,
+    stack: RefPtr<List>,
     /// The current stack base pointer
     stack_base: Cell<ArraySize>,
     /// A dict that should only contain Number keys and Upvalue values. This is a mapping of
     /// absolute stack indeces to Upvalue objects where stack values are closed over.
-    upvalues: CellPtr<Dict>,
+    upvalues: RefPtr<Dict>,
     /// A dict that should only contain Symbol keys but any type as values
-    globals: CellPtr<Dict>,
+    globals: RefPtr<Dict>,
     /// The current instruction location
-    instr: CellPtr<InstructionStream>,
+    instr: RefPtr<InstructionStream>,
 }
 // ANCHOR_END: DefThread
 
@@ -215,12 +216,12 @@ impl Thread {
         let instr = InstructionStream::alloc(mem, blank_code)?;
 
         mem.alloc(Thread {
-            frames: CellPtr::new_with(frames),
-            stack: CellPtr::new_with(stack),
+            frames: RefPtr::new_with(frames),
+            stack: RefPtr::new_with(stack),
             stack_base: Cell::new(0),
-            upvalues: CellPtr::new_with(upvalues),
-            globals: CellPtr::new_with(globals),
-            instr: CellPtr::new_with(instr),
+            upvalues: RefPtr::new_with(upvalues),
+            globals: RefPtr::new_with(globals),
+            instr: RefPtr::new_with(instr),
         })
     }
 
@@ -230,7 +231,7 @@ impl Thread {
         guard: &'guard dyn MutatorScope,
         location: ArraySize,
     ) -> Result<(TaggedScopedPtr<'guard>, ScopedPtr<'guard, Upvalue>), RuntimeError> {
-        let upvalues = self.upvalues.get(guard);
+        let upvalues = self.upvalues.scoped_ptr(guard);
 
         // Convert the location integer to a TaggedScopedPtr for passing
         // into the Thread's upvalues Dict
@@ -259,7 +260,7 @@ impl Thread {
         match self.upvalue_lookup(mem, location) {
             Ok(v) => Ok(v),
             Err(_) => {
-                let upvalues = self.upvalues.get(mem);
+                let upvalues = self.upvalues.scoped_ptr(mem);
                 let upvalue = Upvalue::alloc(mem, location)?;
 
                 let location_ptr = TaggedScopedPtr::number(mem, location as isize);
@@ -278,10 +279,10 @@ impl Thread {
     ) -> Result<EvalStatus<'guard>, RuntimeError> {
         // TODO not all these locals are required in every opcode - optimize and get them only
         // where needed
-        let frames = self.frames.get(mem);
-        let stack = self.stack.get(mem);
-        let globals = self.globals.get(mem);
-        let instr = self.instr.get(mem);
+        let frames = self.frames.scoped_ptr(mem);
+        let stack = self.stack.scoped_ptr(mem);
+        let globals = self.globals.scoped_ptr(mem);
+        let instr = self.instr.scoped_ptr(mem);
 
         // Establish a 256-register window into the stack from the stack base.
         let status = stack.access_slice(mem, |full_stack| {
@@ -710,7 +711,7 @@ impl Thread {
                             let (location_ptr, upvalue) = self.upvalue_lookup(mem, location)?;
                             // close it and unanchor from the Thread
                             upvalue.close(mem, stack)?;
-                            self.upvalues.get(mem).dissoc(mem, location_ptr)?;
+                            self.upvalues.scoped_ref(mem).dissoc(mem, location_ptr)?;
                         }
                     }
                 }
@@ -736,11 +737,11 @@ impl Thread {
     ) -> Result<TaggedScopedPtr<'guard>, RuntimeError> {
         let mut status = EvalStatus::Pending;
 
-        let frames = self.frames.get(mem);
+        let frames = self.frames.scoped_ref(mem);
         frames.push(mem, CallFrame::new_main(function))?;
 
         let code = function.code(mem);
-        let instr = self.instr.get(mem);
+        let instr = self.instr.scoped_ref(mem);
         instr.switch_frame(code, 0);
 
         while status == EvalStatus::Pending {
@@ -762,11 +763,11 @@ impl Thread {
         mem: &'guard MutatorView,
         function: ScopedPtr<'guard, Function>,
     ) -> Result<EvalStatus<'guard>, RuntimeError> {
-        let frames = self.frames.get(mem);
+        let frames = self.frames.scoped_ref(mem);
         frames.push(mem, CallFrame::new_main(function))?;
 
         let code = function.code(mem);
-        let instr = self.instr.get(mem);
+        let instr = self.instr.scoped_ref(mem);
         instr.switch_frame(code, 0);
 
         self.continue_exec(mem, 1024)
@@ -789,7 +790,7 @@ impl Thread {
                 // Evaluation hit an error
                 Err(rt_error) => {
                     // unwind the stack, printing a trace
-                    let frames = self.frames.get(mem);
+                    let frames = self.frames.scoped_ref(mem);
 
                     // Print a stack trace if the error is multiple call frames deep
                     frames.access_slice(mem, |window| {

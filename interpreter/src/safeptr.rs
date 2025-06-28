@@ -5,7 +5,7 @@ use std::ops::Deref;
 use stickyimmix::{AllocObject, RawPtr};
 
 use crate::headers::TypeList;
-use crate::pointerops::ScopedRef;
+use crate::pointerops::AsScopedRef;
 use crate::printer::Print;
 use crate::taggedptr::{FatPtr, TaggedPtr, Value};
 
@@ -13,23 +13,6 @@ use crate::taggedptr::{FatPtr, TaggedPtr, Value};
 // ANCHOR: DefMutatorScope
 pub trait MutatorScope {}
 // ANCHOR_END: DefMutatorScope
-
-// Copy On Write semantics? Maybe the below...
-// TODO, add MutatorView methods that can return MutScopedPtr?
-//
-// pub trait CopyOnWrite {
-//     fn copy_mut<'guard>(&self, _guard: &'guard MutatorView) -> MutScopedPtr<'guard, Self>;
-// }
-//
-// pub struct MutScopedPtr<'guard, T: Sized> {
-//     value: &mut 'guard T
-// }
-//
-// impl Deref, DerefMut for MutScopedPtr
-//
-// impl<'guard, T: Sized> MutScopedPtr<'guard, T> {
-//    pub fn into_immut(self) -> ScopedPtr<'guard, T> {}
-// }
 
 /// An untagged compile-time typed pointer with scope limited by `MutatorScope`
 // ANCHOR: DefScopedPtr
@@ -59,17 +42,17 @@ impl<'guard, T: Sized> ScopedPtr<'guard, T> {
 }
 
 /// Anything that _has_ a scope lifetime can pass as a scope representation
-impl<'scope, T: Sized> MutatorScope for ScopedPtr<'scope, T> {}
+impl<T: Sized> MutatorScope for ScopedPtr<'_, T> {}
 
 impl<'guard, T: Sized> Clone for ScopedPtr<'guard, T> {
     fn clone(&self) -> ScopedPtr<'guard, T> {
-        ScopedPtr { value: self.value }
+       *self 
     }
 }
 
-impl<'guard, T: Sized> Copy for ScopedPtr<'guard, T> {}
+impl<T: Sized> Copy for ScopedPtr<'_, T> {}
 
-impl<'guard, T: Sized> Deref for ScopedPtr<'guard, T> {
+impl<T: Sized> Deref for ScopedPtr<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -77,13 +60,13 @@ impl<'guard, T: Sized> Deref for ScopedPtr<'guard, T> {
     }
 }
 
-impl<'guard, T: Sized + Print> fmt::Display for ScopedPtr<'guard, T> {
+impl<T: Sized + Print> fmt::Display for ScopedPtr<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.value.print(self, f)
     }
 }
 
-impl<'guard, T: Sized + Print> fmt::Debug for ScopedPtr<'guard, T> {
+impl<T: Sized + Print> fmt::Debug for ScopedPtr<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.value.print(self, f)
     }
@@ -92,6 +75,38 @@ impl<'guard, T: Sized + Print> fmt::Debug for ScopedPtr<'guard, T> {
 impl<'guard, T: Sized + PartialEq> PartialEq for ScopedPtr<'guard, T> {
     fn eq(&self, rhs: &ScopedPtr<'guard, T>) -> bool {
         self.value == rhs.value
+    }
+}
+
+pub trait AsScopedPtr<T> {
+    fn scoped_ptr<'scope>(&self, guard: &'scope dyn MutatorScope) -> ScopedPtr<'scope, T>;
+}
+
+
+/// A wrapper around untagged raw pointers for storing compile-time typed pointers in
+/// data structures that are not expected to change in pointer value, i.e. once the
+/// object is initialized, it remains immutably pointing at that object.
+pub struct RefPtr<T: Sized> {
+    inner: RawPtr<T>,
+}
+
+impl<T: Sized> RefPtr<T> {
+    pub fn new_with(source: ScopedPtr<T>) -> RefPtr<T> {
+        RefPtr {
+            inner: RawPtr::new(source.value),
+        }
+    }
+}
+
+impl<T> AsScopedRef<T> for RefPtr<T> {
+    fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T {
+        self.inner.scoped_ref(guard)
+    }
+}
+
+impl<T> AsScopedPtr<T> for RefPtr<T> {
+    fn scoped_ptr<'scope>(&self, guard: &'scope dyn MutatorScope) -> ScopedPtr<'scope, T> {
+        ScopedPtr::new(guard, self.inner.scoped_ref(guard))
     }
 }
 
@@ -169,15 +184,11 @@ impl<'guard> TaggedScopedPtr<'guard> {
     pub fn value(&self) -> Value<'guard> {
         self.value
     }
-
-    pub fn get_ptr(&self) -> TaggedPtr {
-        self.ptr
-    }
 }
 
 /// Anything that _has_ a scope lifetime can pass as a scope representation. `Value` also implements
 /// `MutatorScope` so this is largely for consistency.
-impl<'scope> MutatorScope for TaggedScopedPtr<'scope> {}
+impl MutatorScope for TaggedScopedPtr<'_> {}
 
 impl<'guard> Deref for TaggedScopedPtr<'guard> {
     type Target = Value<'guard>;
@@ -187,13 +198,13 @@ impl<'guard> Deref for TaggedScopedPtr<'guard> {
     }
 }
 
-impl<'guard> fmt::Display for TaggedScopedPtr<'guard> {
+impl fmt::Display for TaggedScopedPtr<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.value.fmt(f)
     }
 }
 
-impl<'guard> fmt::Debug for TaggedScopedPtr<'guard> {
+impl fmt::Debug for TaggedScopedPtr<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.value.fmt(f)
     }
@@ -225,7 +236,7 @@ impl TaggedCellPtr {
     /// Construct a new TaggedCellPtr from a TaggedScopedPtr
     pub fn new_with(source: TaggedScopedPtr) -> TaggedCellPtr {
         TaggedCellPtr {
-            inner: Cell::new(TaggedPtr::from(source.ptr)),
+            inner: Cell::new(source.ptr),
         }
     }
 
@@ -248,16 +259,16 @@ impl TaggedCellPtr {
     /// The explicit 'guard lifetime bound to MutatorScope is omitted here since the TaggedScopedPtr
     /// carries this lifetime already so we can assume that this operation is safe
     pub fn set(&self, source: TaggedScopedPtr) {
-        self.inner.set(TaggedPtr::from(source.ptr))
+        self.inner.set(source.ptr)
     }
 
     /// Take the pointer of another `TaggedCellPtr` and set this instance to point at that object too
-    pub fn copy_from<'guard>(&self, _guard: &'guard dyn MutatorScope, src: &TaggedCellPtr) {
+    pub fn copy_from(&self, _guard: &'_ dyn MutatorScope, src: &TaggedCellPtr) {
         self.inner.set(src.inner.get());
     }
 
     /// Set another instance to hold the same pointer as this instance
-    pub fn copy_into<'guard>(&self, _guard: &'guard dyn MutatorScope, dest: &TaggedCellPtr) {
+    pub fn copy_into(&self, _guard: &'_ dyn MutatorScope, dest: &TaggedCellPtr) {
         dest.inner.set(self.inner.get());
     }
 
@@ -275,13 +286,13 @@ impl TaggedCellPtr {
     // TODO DEPRECATE IF POSSIBLE
     //  - this is only used to set non-object tagged values and should be replaced/renamed
     // XXX: this should be unsafe
-    pub fn set_to_ptr<'guard>(&self, _guard: &'guard dyn MutatorScope, ptr: TaggedPtr) {
+    pub fn set_to_ptr(&self, _guard: &'_ dyn MutatorScope, ptr: TaggedPtr) {
         self.inner.set(ptr)
     }
 
     /// Return the raw TaggedPtr from within
     // TODO DEPRECATE IF POSSIBLE
-    pub fn get_ptr<'guard>(&self, _guard: &'guard dyn MutatorScope) -> TaggedPtr {
+    pub fn get_ptr(&self, _guard: &'_ dyn MutatorScope) -> TaggedPtr {
         self.inner.get()
     }
 }

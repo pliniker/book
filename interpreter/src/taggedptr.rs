@@ -23,7 +23,7 @@ use crate::list::List;
 use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
-use crate::pointerops::{get_tag, ScopedRef, Tagged, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL};
+use crate::pointerops::{get_tag, AsScopedRef, Tagged, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL};
 use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr};
 use crate::symbol::Symbol;
@@ -54,7 +54,7 @@ pub enum Value<'guard> {
 // ANCHOR_END: DefValue
 
 /// `Value` can have a safe `Display` implementation
-impl<'guard> fmt::Display for Value<'guard> {
+impl fmt::Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Nil => write!(f, "nil"),
@@ -75,7 +75,7 @@ impl<'guard> fmt::Display for Value<'guard> {
     }
 }
 
-impl<'guard> fmt::Debug for Value<'guard> {
+impl fmt::Debug for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::ArrayU8(a) => a.debug(self, f),
@@ -96,7 +96,7 @@ impl<'guard> fmt::Debug for Value<'guard> {
     }
 }
 
-impl<'guard> MutatorScope for Value<'guard> {}
+impl MutatorScope for Value<'_> {}
 
 /// An unpacked tagged Fat Pointer that carries the type information in the enum structure.
 /// This should represent every type native to the runtime.

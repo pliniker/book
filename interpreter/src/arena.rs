@@ -2,7 +2,7 @@
 /// Currently implemented on top of stickyimmix without any gc which includes unnecessary
 /// overhead.
 use std::ptr::NonNull;
-
+ 
 use stickyimmix::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, RawPtr, SizeClass,
     StickyImmixHeap,
