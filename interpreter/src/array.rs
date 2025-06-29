@@ -101,9 +101,9 @@ impl<T: Sized + Clone> Array<T> {
 
     /// Bounds-checked write
     // ANCHOR: DefArrayWrite
-    fn write<'guard>(
+    fn write(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         index: ArraySize,
         item: T,
     ) -> Result<&T, RuntimeError> {
@@ -117,9 +117,9 @@ impl<T: Sized + Clone> Array<T> {
 
     /// Bounds-checked read
     // ANCHOR: DefArrayRead
-    fn read<'guard>(
+    fn read(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         index: ArraySize,
     ) -> Result<T, RuntimeError> {
         unsafe {
@@ -131,9 +131,9 @@ impl<T: Sized + Clone> Array<T> {
 
     /// Bounds-checked reference-read
     // ANCHOR: DefArrayReadRef
-    pub fn read_ref<'guard>(
+    pub fn read_ref(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         index: ArraySize,
     ) -> Result<&T, RuntimeError> {
         unsafe {
@@ -147,7 +147,7 @@ impl<T: Sized + Clone> Array<T> {
     /// duration because while a slice is held, other code can cause array internals to change
     /// that might cause the slice pointer and length to become invalid. Interior mutability
     /// patterns such as RefCell-style should be used in addition.
-    pub unsafe fn as_slice<'guard>(&self, _guard: &'guard dyn MutatorScope) -> &mut [T] {
+    pub unsafe fn as_slice(&self, _guard: &'_ dyn MutatorScope) -> &mut [T] {
         if let Some(ptr) = self.data.get().as_ptr() {
             from_raw_parts_mut(ptr as *mut T, self.length.get() as usize)
         } else {
@@ -160,7 +160,7 @@ impl<T: Sized + Clone> Array<T> {
     /// duration because while a slice is held, other code can cause array internals to change
     /// that might cause the slice pointer and length to become invalid. Interior mutability
     /// patterns such as RefCell-style should be used in addition.
-    pub unsafe fn as_capacity_slice<'guard>(&self, _guard: &'guard dyn MutatorScope) -> &mut [T] {
+    pub unsafe fn as_capacity_slice(&self, _guard: &'_ dyn MutatorScope) -> &mut [T] {
         if let Some(ptr) = self.data.get().as_ptr() {
             from_raw_parts_mut(ptr as *mut T, self.data.get().capacity() as usize)
         } else {
@@ -178,8 +178,8 @@ impl<T: Sized + Clone> Container<T> for Array<T> {
         }
     }
 
-    fn with_capacity<'guard>(
-        mem: &'guard MutatorView,
+    fn with_capacity(
+        mem: &'_ MutatorView,
         capacity: ArraySize,
     ) -> Result<Array<T>, RuntimeError> {
         Ok(Array {
@@ -189,7 +189,7 @@ impl<T: Sized + Clone> Container<T> for Array<T> {
         })
     }
 
-    fn clear<'guard>(&self, _guard: &'guard MutatorView) -> Result<(), RuntimeError> {
+    fn clear(&self, _guard: &'_ MutatorView) -> Result<(), RuntimeError> {
         if self.borrow.get() != INTERIOR_ONLY {
             Err(RuntimeError::new(ErrorKind::MutableBorrowError))
         } else {
@@ -207,9 +207,9 @@ impl<T: Sized + Clone> FillContainer<T> for Array<T> {
     /// Increase the size of the array to `size` and fill the new slots with
     /// copies of `item`. If `size` is less than the current length of the array,
     /// does nothing.
-    fn fill<'guard>(
+    fn fill(
         &self,
-        mem: &'guard MutatorView,
+        mem: &'_ MutatorView,
         size: ArraySize,
         item: T,
     ) -> Result<(), RuntimeError> {
@@ -250,7 +250,7 @@ impl<T: Sized + Clone> FillContainer<T> for Array<T> {
 impl<T: Sized + Clone> StackContainer<T> for Array<T> {
     /// Push can trigger an underlying array resize, hence it requires the ability to allocate
     // ANCHOR: DefStackContainerArrayPush
-    fn push<'guard>(&self, mem: &'guard MutatorView, item: T) -> Result<(), RuntimeError> {
+    fn push(&self, mem: &'_ MutatorView, item: T) -> Result<(), RuntimeError> {
         if self.borrow.get() != INTERIOR_ONLY {
             return Err(RuntimeError::new(ErrorKind::MutableBorrowError));
         }
@@ -278,7 +278,7 @@ impl<T: Sized + Clone> StackContainer<T> for Array<T> {
 
     /// Pop returns None if the container is empty, otherwise moves the last item of the array
     /// out to the caller.
-    fn pop<'guard>(&self, guard: &'guard dyn MutatorScope) -> Result<T, RuntimeError> {
+    fn pop(&self, guard: &'_ dyn MutatorScope) -> Result<T, RuntimeError> {
         if self.borrow.get() != INTERIOR_ONLY {
             return Err(RuntimeError::new(ErrorKind::MutableBorrowError));
         }
@@ -296,7 +296,7 @@ impl<T: Sized + Clone> StackContainer<T> for Array<T> {
     }
 
     /// Return the value at the top of the stack without removing it
-    fn top<'guard>(&self, guard: &'guard dyn MutatorScope) -> Result<T, RuntimeError> {
+    fn top(&self, guard: &'_ dyn MutatorScope) -> Result<T, RuntimeError> {
         let length = self.length.get();
 
         if length == 0 {
@@ -311,18 +311,18 @@ impl<T: Sized + Clone> StackContainer<T> for Array<T> {
 
 impl<T: Sized + Clone> IndexedContainer<T> for Array<T> {
     /// Return a copy of the object at the given index. Bounds-checked.
-    fn get<'guard>(
+    fn get(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         index: ArraySize,
     ) -> Result<T, RuntimeError> {
         self.read(guard, index)
     }
 
     /// Move an object into the array at the given index. Bounds-checked.
-    fn set<'guard>(
+    fn set(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         index: ArraySize,
         item: T,
     ) -> Result<(), RuntimeError> {
@@ -332,7 +332,7 @@ impl<T: Sized + Clone> IndexedContainer<T> for Array<T> {
 }
 
 impl<T: Sized + Clone> SliceableContainer<T> for Array<T> {
-    fn access_slice<'guard, F, R>(&self, guard: &'guard dyn MutatorScope, f: F) -> R
+    fn access_slice<F, R>(&self, guard: &'_ dyn MutatorScope, f: F) -> R
     where
         F: FnOnce(&mut [T]) -> R,
     {
@@ -348,9 +348,9 @@ impl<T: Sized + Clone> SliceableContainer<T> for Array<T> {
 pub type ArrayU8 = Array<u8>;
 
 impl Print for ArrayU8 {
-    fn print<'guard>(
+    fn print(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         write!(f, "ArrayU8[...]")
@@ -361,9 +361,9 @@ impl Print for ArrayU8 {
 pub type ArrayU16 = Array<u16>;
 
 impl Print for ArrayU16 {
-    fn print<'guard>(
+    fn print(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         write!(f, "ArrayU16[...]")
@@ -374,9 +374,9 @@ impl Print for ArrayU16 {
 pub type ArrayU32 = Array<u32>;
 
 impl Print for ArrayU32 {
-    fn print<'guard>(
+    fn print(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         write!(f, "ArrayU32[...]")
@@ -529,9 +529,9 @@ impl AnyContainerFromSlice for Array<TaggedCellPtr> {
 }
 
 impl Print for Array<TaggedCellPtr> {
-    fn print<'guard>(
+    fn print(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         write!(f, "[")?;

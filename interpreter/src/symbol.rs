@@ -46,9 +46,9 @@ impl Symbol {
 
 impl Print for Symbol {
     /// Safe because the lifetime of `MutatorScope` defines a safe-access window
-    fn print<'guard>(
+    fn print(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         write!(f, "{}", self.as_str(guard))
@@ -57,7 +57,7 @@ impl Print for Symbol {
 
 // ANCHOR: DefImplHashableForSymbol
 impl Hashable for Symbol {
-    fn hash<'guard, H: Hasher>(&self, guard: &'guard dyn MutatorScope, h: &mut H) {
+    fn hash<H: Hasher>(&self, guard: &'_ dyn MutatorScope, h: &mut H) {
         self.as_str(guard).hash(h)
     }
 }

@@ -69,9 +69,9 @@ impl Scope {
     }
 
     /// Add a Symbol->Register binding to this scope
-    fn push_binding<'guard>(
+    fn push_binding(
         &mut self,
-        name: TaggedScopedPtr<'guard>,
+        name: TaggedScopedPtr<'_>,
         reg: Register,
     ) -> Result<(), RuntimeError> {
         let name_string = match *name {
@@ -86,9 +86,9 @@ impl Scope {
 
     /// Push a block of bindings into this scope, returning the next register available
     /// after these bound registers. All these variables will be Unclosed by default.
-    fn push_bindings<'guard>(
+    fn push_bindings(
         &mut self,
-        names: &[TaggedScopedPtr<'guard>],
+        names: &[TaggedScopedPtr<'_>],
         start_reg: Register,
     ) -> Result<Register, RuntimeError> {
         let mut reg = start_reg;
@@ -100,7 +100,7 @@ impl Scope {
     }
 
     /// Find a Symbol->Register binding in this scope
-    fn lookup_binding<'guard>(&self, name: &str) -> Option<&Variable> {
+    fn lookup_binding(&self, name: &str) -> Option<&Variable> {
         self.bindings.get(name)
     }
 }
@@ -154,9 +154,9 @@ impl<'parent> Variables<'parent> {
     }
 
     /// Search for a binding, following parent scopes.
-    fn lookup_binding<'guard>(
+    fn lookup_binding(
         &self,
-        name: TaggedScopedPtr<'guard>,
+        name: TaggedScopedPtr<'_>,
     ) -> Result<Option<Binding>, RuntimeError> {
         //  return value should be (count-of-parent-functions-followed, Variable)
         let name_string = match *name {
@@ -183,7 +183,7 @@ impl<'parent> Variables<'parent> {
                         // Create a new upvalue reference if one does not exist.
                         let mut nonlocals = self.nonlocals.borrow_mut();
 
-                        if let None = nonlocals.get(&name_string) {
+                        if nonlocals.get(&name_string).is_none() {
                             // Create a new non-local descriptor and add it
                             let nonlocal = Nonlocal::new(
                                 self.acquire_upvalue_id(),
@@ -246,7 +246,7 @@ impl<'parent> Variables<'parent> {
     }
 
     /// Pop the last scoped variables and create close-upvalue instructions for any closed over
-    fn pop_scope<'guard>(&mut self) -> Vec<Opcode> {
+    fn pop_scope(&mut self) -> Vec<Opcode> {
         let mut closings = Vec::new();
 
         if let Some(scope) = self.scopes.pop() {
@@ -334,7 +334,7 @@ impl<'parent> Compiler<'parent> {
         self.vars.scopes.push(param_scope);
 
         // validate expression list
-        if exprs.len() == 0 {
+        if exprs.is_empty() {
             return Err(err_eval("A function must have at least one expression"));
         }
 
@@ -356,13 +356,13 @@ impl<'parent> Compiler<'parent> {
 
         let fn_nonlocals = self.vars.get_nonlocals(mem)?;
 
-        Ok(Function::alloc(
+        Function::alloc(
             mem,
             fn_name,
             fn_params,
             fn_bytecode,
             fn_nonlocals,
-        )?)
+        )
     }
     // ANCHOR_END: DefCompilerCompileFunction
 
@@ -753,7 +753,7 @@ impl<'parent> Compiler<'parent> {
     }
 
     /// Push an instruction to the function bytecode list
-    fn push<'guard>(&mut self, mem: &'guard MutatorView, op: Opcode) -> Result<(), RuntimeError> {
+    fn push(&mut self, mem: &'_ MutatorView, op: Opcode) -> Result<(), RuntimeError> {
         self.bytecode.get(mem).push(mem, op)
     }
 
@@ -990,7 +990,7 @@ mod integration {
             let result = vec_from_pairs(mem, result)?;
             let sym_nil = mem.nil();
             let sym_true = mem.lookup_sym("true");
-            assert!(result == &[sym_nil, sym_true, sym_nil, sym_nil, sym_true]);
+            assert!(result == [sym_nil, sym_true, sym_nil, sym_nil, sym_true]);
 
             Ok(())
         }

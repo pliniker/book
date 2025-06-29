@@ -71,16 +71,16 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
         }
 
         Ok(value)
-    })(mem, &line)
+    })(mem, line)
     {
         Ok(value) => println!("{}", value),
 
         Err(e) => {
             match e.error_kind() {
                 // non-fatal repl errors
-                ErrorKind::LexerError(_) => e.print_with_source(&line),
-                ErrorKind::ParseError(_) => e.print_with_source(&line),
-                ErrorKind::EvalError(_) => e.print_with_source(&line),
+                ErrorKind::LexerError(_) => e.print_with_source(line),
+                ErrorKind::ParseError(_) => e.print_with_source(line),
+                ErrorKind::EvalError(_) => e.print_with_source(line),
                 _ => return Err(e),
             }
         }

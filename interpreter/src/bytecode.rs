@@ -185,14 +185,14 @@ impl ByteCode {
     }
 
     /// Append an instuction to the back of the sequence
-    pub fn push<'guard>(&self, mem: &'guard MutatorView, op: Opcode) -> Result<(), RuntimeError> {
+    pub fn push(&self, mem: &'_ MutatorView, op: Opcode) -> Result<(), RuntimeError> {
         self.code.push(mem, op)
     }
 
     /// Set the jump offset of an existing jump instruction to a new value
-    pub fn update_jump_offset<'guard>(
+    pub fn update_jump_offset(
         &self,
-        mem: &'guard MutatorView,
+        mem: &'_ MutatorView,
         instruction: ArraySize,
         offset: JumpOffset,
     ) -> Result<(), RuntimeError> {
@@ -212,9 +212,9 @@ impl ByteCode {
     }
 
     /// Append a literal-load operation to the back of the sequence
-    pub fn push_loadlit<'guard>(
+    pub fn push_loadlit(
         &self,
-        mem: &'guard MutatorView,
+        mem: &'_ MutatorView,
         dest: Register,
         literal_id: LiteralId,
     ) -> Result<(), RuntimeError> {
@@ -246,9 +246,9 @@ impl ByteCode {
 }
 
 impl Print for ByteCode {
-    fn print<'guard>(
+    fn print(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         let mut instr_str = String::new();
@@ -293,9 +293,9 @@ impl InstructionStream {
     /// Retrieve the next instruction and return it, incrementing the instruction pointer
     // TODO: https://github.com/rust-hosted-langs/book/issues/39
     // ANCHOR: DefInstructionStreamGetNextOpcode
-    pub fn get_next_opcode<'guard>(
+    pub fn get_next_opcode(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
     ) -> Result<Opcode, RuntimeError> {
         let instr = self
             .instructions
@@ -308,9 +308,9 @@ impl InstructionStream {
     // ANCHOR_END: DefInstructionStreamGetNextOpcode
 
     /// Given an index into the literals list, return the pointer in the list at that index.
-    pub fn get_literal<'guard>(
+    pub fn get_literal(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         lit_id: LiteralId,
     ) -> Result<TaggedPtr, RuntimeError> {
         Ok(IndexedContainer::get(

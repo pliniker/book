@@ -36,10 +36,7 @@ pub struct RawArray<T: Sized> {
 /// be used in a Cell
 impl<T: Sized> Clone for RawArray<T> {
     fn clone(&self) -> Self {
-        RawArray {
-            capacity: self.capacity,
-            ptr: self.ptr,
-        }
+        *self
     }
 }
 
@@ -56,8 +53,8 @@ impl<T: Sized> RawArray<T> {
 
     /// Return a RawArray of the given capacity number of bytes allocated
     // ANCHOR: DefRawArrayWithCapacity
-    pub fn with_capacity<'scope>(
-        mem: &'scope MutatorView,
+    pub fn with_capacity(
+        mem: &'_ MutatorView,
         capacity: u32,
     ) -> Result<RawArray<T>, RuntimeError> {
         // convert to bytes, checking for possible overflow of ArraySize limit
@@ -75,9 +72,9 @@ impl<T: Sized> RawArray<T> {
     /// Resize the array to the new capacity
     /// TODO the inner implementation of this should live in the allocator API to make
     /// better use of optimizations
-    pub fn resize<'scope>(
+    pub fn resize(
         &mut self,
-        mem: &'scope MutatorView,
+        mem: &'_ MutatorView,
         new_capacity: u32,
     ) -> Result<(), RuntimeError> {
         // If we're reducing the capacity to 0, simply detach the array pointer

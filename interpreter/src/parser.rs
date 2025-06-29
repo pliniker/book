@@ -90,12 +90,12 @@ impl<'guard> PairList<'guard> {
 // If a list token is:
 //  * a Dot, it must be followed by an s-expression and a CloseParen
 //
-fn parse_list<'guard, 'i, I: 'i>(
+fn parse_list<'guard, 'i, I>(
     mem: &'guard MutatorView,
     tokens: &mut Peekable<I>,
 ) -> Result<TaggedScopedPtr<'guard>, RuntimeError>
 where
-    I: Iterator<Item = &'i Token>,
+    I: 'i + Iterator<Item = &'i Token>,
 {
     use self::TokenType::*;
 
@@ -195,12 +195,12 @@ where
 //  * symbol
 //  * or a list
 //
-fn parse_sexpr<'guard, 'i, I: 'i>(
+fn parse_sexpr<'guard, 'i, I>(
     mem: &'guard MutatorView,
     tokens: &mut Peekable<I>,
 ) -> Result<TaggedScopedPtr<'guard>, RuntimeError>
 where
-    I: Iterator<Item = &'i Token>,
+    I: 'i + Iterator<Item = &'i Token>,
 {
     use self::TokenType::*;
 

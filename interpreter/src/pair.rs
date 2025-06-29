@@ -51,7 +51,7 @@ impl Pair {
 
     /// Set Pair.second to the given value
     // ANCHOR: DefPairDot
-    pub fn dot<'guard>(&self, value: TaggedScopedPtr<'guard>) {
+    pub fn dot(&self, value: TaggedScopedPtr<'_>) {
         self.second.set(value);
     }
     // ANCHOR_END: DefPairDot
@@ -66,9 +66,9 @@ impl Pair {
 }
 
 impl Print for Pair {
-    fn print<'guard>(
+    fn print(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         let mut tail = ScopedPtr::new(guard, self);
@@ -91,9 +91,9 @@ impl Print for Pair {
     }
 
     // In debug print, use dot notation
-    fn debug<'guard>(
+    fn debug(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         write!(

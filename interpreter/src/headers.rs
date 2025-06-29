@@ -115,7 +115,7 @@ impl AllocHeader for ObjectHeader {
             mark,
             size_class,
             type_id: TypeList::ArrayBackingBytes,
-            size_bytes: size as u32,
+            size_bytes: size,
         }
     }
 

@@ -84,7 +84,7 @@ impl Function {
     }
 
     /// Return true if the function is a closure - it has nonlocal variable references
-    pub fn is_closure<'guard>(&self) -> bool {
+    pub fn is_closure(&self) -> bool {
         !self.nonlocal_refs.is_nil()
     }
 
@@ -104,9 +104,9 @@ impl Function {
 
 impl Print for Function {
     /// Prints a string representation of the function
-    fn print<'guard>(
+    fn print(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         let name = self.name.get(guard);
@@ -124,9 +124,9 @@ impl Print for Function {
     }
 
     /// Prints the disassembled bytecode
-    fn debug<'guard>(
+    fn debug(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         self.print(guard, f)?;
@@ -236,9 +236,9 @@ impl Partial {
 
 impl Print for Partial {
     /// Prints a string representation of the Partial object
-    fn print<'guard>(
+    fn print(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         let function = self.func.get(guard);
@@ -258,9 +258,9 @@ impl Print for Partial {
     }
 
     /// Prints the associated function's disassembled bytecode
-    fn debug<'guard>(
+    fn debug(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         self.print(guard, f)?;
@@ -269,10 +269,3 @@ impl Print for Partial {
     }
 }
 
-/// A list of arguments to apply to functions
-pub struct CurriedArguments {
-    // TODO
-    // not sure of the mechanics of this.
-    // The ghc runtime would push all these to the stack and then consume the stack with
-    // function continuations
-}

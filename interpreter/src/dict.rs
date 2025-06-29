@@ -104,8 +104,8 @@ fn find_entry<'guard>(
 // ANCHOR_END: DefFindEntry
 
 /// Reset all slots to a blank entry
-fn fill_with_blank_entries<'guard>(
-    _guard: &'guard dyn MutatorScope,
+fn fill_with_blank_entries(
+    _guard: &'_ dyn MutatorScope,
     data: &RawArray<DictItem>,
 ) -> Result<(), RuntimeError> {
     let ptr = data
@@ -158,7 +158,7 @@ impl Dict {
     }
 
     /// Scale capacity up if needed
-    fn grow_capacity<'guard>(&self, mem: &'guard MutatorView) -> Result<(), RuntimeError> {
+    fn grow_capacity(&self, mem: &'_ MutatorView) -> Result<(), RuntimeError> {
         let data = self.data.get();
 
         let new_capacity = default_array_growth(data.capacity())?;
@@ -190,8 +190,8 @@ impl Container<DictItem> for Dict {
         }
     }
 
-    fn with_capacity<'guard>(
-        mem: &'guard MutatorView,
+    fn with_capacity(
+        mem: &'_ MutatorView,
         capacity: ArraySize,
     ) -> Result<Self, RuntimeError> {
         let dict = Dict {
@@ -206,7 +206,7 @@ impl Container<DictItem> for Dict {
         Ok(dict)
     }
 
-    fn clear<'guard>(&self, mem: &'guard MutatorView) -> Result<(), RuntimeError> {
+    fn clear(&self, mem: &'_ MutatorView) -> Result<(), RuntimeError> {
         let data = self.data.get();
         fill_with_blank_entries(mem, &data)?;
         self.length.set(0);
@@ -305,9 +305,9 @@ impl HashIndexedAnyContainer for Dict {
     }
     // ANCHOR_END: DefHashIndexedAnyContainerForDictDissoc
 
-    fn exists<'guard>(
+    fn exists(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         key: TaggedScopedPtr,
     ) -> Result<bool, RuntimeError> {
         let hash = hash_key(guard, key)?;
@@ -318,9 +318,9 @@ impl HashIndexedAnyContainer for Dict {
 }
 
 impl Print for Dict {
-    fn print<'guard>(
+    fn print(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         // TODO

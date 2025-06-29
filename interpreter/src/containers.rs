@@ -20,13 +20,13 @@ pub trait Container<T: Sized + Clone>: Sized {
     fn new() -> Self;
     /// Create a new container instance with the given capacity.
     // TODO: this may not make sense for tree types
-    fn with_capacity<'guard>(
-        mem: &'guard MutatorView,
+    fn with_capacity(
+        mem: &'_ MutatorView,
         capacity: ArraySize,
     ) -> Result<Self, RuntimeError>;
 
     /// Reset the size of the container to zero - empty
-    fn clear<'guard>(&self, mem: &'guard MutatorView) -> Result<(), RuntimeError>;
+    fn clear(&self, mem: &'_ MutatorView) -> Result<(), RuntimeError>;
 
     /// Count of items in the container
     fn length(&self) -> ArraySize;
@@ -35,9 +35,9 @@ pub trait Container<T: Sized + Clone>: Sized {
 /// If implemented, the container can be filled with a set number of values in one operation
 pub trait FillContainer<T: Sized + Clone>: Container<T> {
     /// The `item` is an object to copy into each container memory slot.
-    fn fill<'guard>(
+    fn fill(
         &self,
-        mem: &'guard MutatorView,
+        mem: &'_ MutatorView,
         size: ArraySize,
         item: T,
     ) -> Result<(), RuntimeError>;
@@ -58,14 +58,14 @@ pub trait FillAnyContainer: FillContainer<TaggedCellPtr> {
 // ANCHOR: DefStackContainer
 pub trait StackContainer<T: Sized + Clone>: Container<T> {
     /// Push can trigger an underlying array resize, hence it requires the ability to allocate
-    fn push<'guard>(&self, mem: &'guard MutatorView, item: T) -> Result<(), RuntimeError>;
+    fn push(&self, mem: &'_ MutatorView, item: T) -> Result<(), RuntimeError>;
 
     /// Pop returns a bounds error if the container is empty, otherwise moves the last item of the
     /// array out to the caller.
-    fn pop<'guard>(&self, _guard: &'guard dyn MutatorScope) -> Result<T, RuntimeError>;
+    fn pop(&self, _guard: &'_ dyn MutatorScope) -> Result<T, RuntimeError>;
 
     /// Return the value at the top of the stack without removing it
-    fn top<'guard>(&self, _guard: &'guard dyn MutatorScope) -> Result<T, RuntimeError>;
+    fn top(&self, _guard: &'_ dyn MutatorScope) -> Result<T, RuntimeError>;
 }
 // ANCHOR_END: DefStackContainer
 
@@ -97,16 +97,16 @@ pub trait StackAnyContainer: StackContainer<TaggedCellPtr> {
 /// Generic indexed-access trait. If implemented, the container can function as an indexable vector
 pub trait IndexedContainer<T: Sized + Clone>: Container<T> {
     /// Return a copy of the object at the given index. Bounds-checked.
-    fn get<'guard>(
+    fn get(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         index: ArraySize,
     ) -> Result<T, RuntimeError>;
 
     /// Move an object into the array at the given index. Bounds-checked.
-    fn set<'guard>(
+    fn set(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         index: ArraySize,
         item: T,
     ) -> Result<(), RuntimeError>;
@@ -126,7 +126,7 @@ pub trait SliceableContainer<T: Sized + Clone>: IndexedContainer<T> {
     /// the implementing container must maintain a RefCell-style flag to catch runtime
     /// container modifications that would render the slice invalid or cause undefined
     /// behavior.
-    fn access_slice<'guard, F, R>(&self, _guard: &'guard dyn MutatorScope, f: F) -> R
+    fn access_slice<F, R>(&self, _guard: &'_ dyn MutatorScope, f: F) -> R
     where
         F: FnOnce(&mut [T]) -> R;
 }
@@ -176,9 +176,9 @@ pub trait HashIndexedAnyContainer {
     ) -> Result<TaggedScopedPtr<'guard>, RuntimeError>;
 
     /// Returns true if the key exists in the container.
-    fn exists<'guard>(
+    fn exists(
         &self,
-        guard: &'guard dyn MutatorScope,
+        guard: &'_ dyn MutatorScope,
         key: TaggedScopedPtr,
     ) -> Result<bool, RuntimeError>;
 }

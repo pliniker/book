@@ -11,9 +11,9 @@ pub struct NumberObject {
 }
 
 impl Print for NumberObject {
-    fn print<'guard>(
+    fn print(
         &self,
-        _guard: &'guard dyn MutatorScope,
+        _guard: &'_ dyn MutatorScope,
         f: &mut fmt::Formatter,
     ) -> fmt::Result {
         // TODO

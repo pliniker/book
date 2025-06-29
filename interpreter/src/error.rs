@@ -46,14 +46,14 @@ pub struct RuntimeError {
 impl RuntimeError {
     pub fn new(kind: ErrorKind) -> RuntimeError {
         RuntimeError {
-            kind: kind,
+            kind,
             pos: None,
         }
     }
 
     pub fn with_pos(kind: ErrorKind, pos: SourcePos) -> RuntimeError {
         RuntimeError {
-            kind: kind,
+            kind,
             pos: Some(pos),
         }
     }
@@ -69,9 +69,9 @@ impl RuntimeError {
     /// Given the relevant source code string, show the error in context
     pub fn print_with_source(&self, source: &str) {
         if let Some(ref pos) = self.pos {
-            let mut iter = source.lines().enumerate();
+            let iter = source.lines().enumerate();
 
-            while let Some((count, line)) = iter.next() {
+            for (count, line) in iter {
                 // count starts at 0, line numbers start at 1
                 if count + 1 == pos.line as usize {
                     println!("error: {}", self);

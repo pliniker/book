@@ -178,9 +178,9 @@ mod test {
     #[test]
     fn lexer_empty_string() {
         if let Ok(tokens) = tokenize("") {
-            assert!(tokens.len() == 0);
+            assert!(tokens.is_empty());
         } else {
-            assert!(false, "unexpected error");
+            panic!("unexpected error");
         }
     }
 
@@ -203,7 +203,7 @@ mod test {
             );
             assert_eq!(tokens[4], Token::new(spos(1, 12), TokenType::CloseParen));
         } else {
-            assert!(false, "unexpected error");
+            panic!("unexpected error");
         }
     }
 
@@ -226,7 +226,7 @@ mod test {
             );
             assert_eq!(tokens[4], Token::new(spos(4, 0), TokenType::CloseParen));
         } else {
-            assert!(false, "unexpected error");
+            panic!("unexpected error");
         }
     }
 
@@ -237,10 +237,10 @@ mod test {
                 assert_eq!(line, 2);
                 assert_eq!(column, 0);
             } else {
-                assert!(false, "Expected error position");
+                panic!("Expected error position");
             }
         } else {
-            assert!(false, "expected ParseEvalError for tab character");
+            panic!("expected ParseEvalError for tab character");
         }
     }
 
@@ -249,7 +249,7 @@ mod test {
         if let Ok(_tokens) = tokenize("(foo \"text\" bar)") {
             // TODO
         } else {
-            assert!(false, "unexpected error")
+            panic!("unexpected error")
         }
     }
 }

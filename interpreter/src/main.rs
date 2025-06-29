@@ -55,7 +55,7 @@ fn load_file(filename: &str) -> Result<String, io::Error> {
 
 /// Read and evaluate an entire file
 fn read_file(filename: &str) -> Result<String, RuntimeError> {
-    let contents = load_file(&filename)?;
+    let contents = load_file(filename)?;
 
     Ok(contents)
 }
