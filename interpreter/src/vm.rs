@@ -13,7 +13,9 @@ use crate::list::List;
 use crate::memory::MutatorView;
 use crate::pair::Pair;
 use crate::pointerops::AsScopedRef;
-use crate::safeptr::{AsScopedPtr, CellPtr, MutatorScope, RefPtr, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
+use crate::safeptr::{
+    AsScopedPtr, CellPtr, MutatorScope, RefPtr, ScopedPtr, TaggedCellPtr, TaggedScopedPtr,
+};
 use crate::taggedptr::{TaggedPtr, Value};
 
 pub const RETURN_REG: usize = 0;
@@ -41,10 +43,10 @@ pub struct CallFrame {
     base: ArraySize,
 }
 // ANCHOR_END: DefCallFrame
- 
+
 impl CallFrame {
     /// Instantiate an outer-level call frame at the beginning of the stack
-    pub fn new_main<'guard>(main_fn: ScopedPtr<'guard, Function>) -> CallFrame {
+    pub fn new_main(main_fn: ScopedPtr<'_, Function>) -> CallFrame {
         CallFrame {
             function: CellPtr::new_with(main_fn),
             ip: Cell::new(0),
@@ -54,11 +56,7 @@ impl CallFrame {
 
     /// Instantiate a new stack frame for the given function, beginning execution at the given
     /// instruction pointer and a register window at `base`
-    fn new<'guard>(
-        function: ScopedPtr<'guard, Function>,
-        ip: ArraySize,
-        base: ArraySize,
-    ) -> CallFrame {
+    fn new(function: ScopedPtr<'_, Function>, ip: ArraySize, base: ArraySize) -> CallFrame {
         CallFrame {
             function: CellPtr::new_with(function),
             ip: Cell::new(ip),
@@ -67,7 +65,7 @@ impl CallFrame {
     }
 
     /// Return a string representation of this stack frame
-    fn as_string<'guard>(&self, guard: &'guard dyn MutatorScope) -> String {
+    fn as_string(&self, guard: &'_ dyn MutatorScope) -> String {
         let function = self.function.get(guard);
         format!("in {}", function)
     }
@@ -746,9 +744,8 @@ impl Thread {
 
         while status == EvalStatus::Pending {
             status = self.continue_exec(mem, 1024)?;
-            match status {
-                EvalStatus::Return(value) => return Ok(value),
-                _ => (),
+            if let EvalStatus::Return(value) = status {
+                return Ok(value);
             }
         }
 
@@ -782,10 +779,11 @@ impl Thread {
         for _ in 0..max_instr {
             match self.eval_next_instr(mem) {
                 // Evaluation paused or completed without error
-                Ok(exit_cond) => match exit_cond {
-                    EvalStatus::Return(value) => return Ok(EvalStatus::Return(value)),
-                    _ => (),
-                },
+                Ok(exit_cond) => {
+                    if let EvalStatus::Return(value) = exit_cond {
+                        return Ok(EvalStatus::Return(value));
+                    }
+                }
 
                 // Evaluation hit an error
                 Err(rt_error) => {
