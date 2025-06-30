@@ -154,10 +154,7 @@ impl<'parent> Variables<'parent> {
     }
 
     /// Search for a binding, following parent scopes.
-    fn lookup_binding(
-        &self,
-        name: TaggedScopedPtr<'_>,
-    ) -> Result<Option<Binding>, RuntimeError> {
+    fn lookup_binding(&self, name: TaggedScopedPtr<'_>) -> Result<Option<Binding>, RuntimeError> {
         //  return value should be (count-of-parent-functions-followed, Variable)
         let name_string = match *name {
             Value::Symbol(s) => String::from(s.as_str(&name)),
@@ -356,13 +353,7 @@ impl<'parent> Compiler<'parent> {
 
         let fn_nonlocals = self.vars.get_nonlocals(mem)?;
 
-        Function::alloc(
-            mem,
-            fn_name,
-            fn_params,
-            fn_bytecode,
-            fn_nonlocals,
-        )
+        Function::alloc(mem, fn_name, fn_params, fn_bytecode, fn_nonlocals)
     }
     // ANCHOR_END: DefCompilerCompileFunction
 

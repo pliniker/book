@@ -246,11 +246,7 @@ impl ByteCode {
 }
 
 impl Print for ByteCode {
-    fn print(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         let mut instr_str = String::new();
 
         self.code.access_slice(guard, |code| {
@@ -293,10 +289,7 @@ impl InstructionStream {
     /// Retrieve the next instruction and return it, incrementing the instruction pointer
     // TODO: https://github.com/rust-hosted-langs/book/issues/39
     // ANCHOR: DefInstructionStreamGetNextOpcode
-    pub fn get_next_opcode(
-        &self,
-        guard: &'_ dyn MutatorScope,
-    ) -> Result<Opcode, RuntimeError> {
+    pub fn get_next_opcode(&self, guard: &'_ dyn MutatorScope) -> Result<Opcode, RuntimeError> {
         let instr = self
             .instructions
             .get(guard)

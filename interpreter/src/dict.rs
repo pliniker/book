@@ -190,10 +190,7 @@ impl Container<DictItem> for Dict {
         }
     }
 
-    fn with_capacity(
-        mem: &'_ MutatorView,
-        capacity: ArraySize,
-    ) -> Result<Self, RuntimeError> {
+    fn with_capacity(mem: &'_ MutatorView, capacity: ArraySize) -> Result<Self, RuntimeError> {
         let dict = Dict {
             length: Cell::new(0),
             used_entries: Cell::new(0),
@@ -318,11 +315,7 @@ impl HashIndexedAnyContainer for Dict {
 }
 
 impl Print for Dict {
-    fn print(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, _guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO
         write!(f, "Dict[...]")
     }

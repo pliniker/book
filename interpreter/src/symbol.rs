@@ -46,11 +46,7 @@ impl Symbol {
 
 impl Print for Symbol {
     /// Safe because the lifetime of `MutatorScope` defines a safe-access window
-    fn print(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_str(guard))
     }
 }

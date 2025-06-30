@@ -20,10 +20,7 @@ pub trait Container<T: Sized + Clone>: Sized {
     fn new() -> Self;
     /// Create a new container instance with the given capacity.
     // TODO: this may not make sense for tree types
-    fn with_capacity(
-        mem: &'_ MutatorView,
-        capacity: ArraySize,
-    ) -> Result<Self, RuntimeError>;
+    fn with_capacity(mem: &'_ MutatorView, capacity: ArraySize) -> Result<Self, RuntimeError>;
 
     /// Reset the size of the container to zero - empty
     fn clear(&self, mem: &'_ MutatorView) -> Result<(), RuntimeError>;
@@ -35,12 +32,7 @@ pub trait Container<T: Sized + Clone>: Sized {
 /// If implemented, the container can be filled with a set number of values in one operation
 pub trait FillContainer<T: Sized + Clone>: Container<T> {
     /// The `item` is an object to copy into each container memory slot.
-    fn fill(
-        &self,
-        mem: &'_ MutatorView,
-        size: ArraySize,
-        item: T,
-    ) -> Result<(), RuntimeError>;
+    fn fill(&self, mem: &'_ MutatorView, size: ArraySize, item: T) -> Result<(), RuntimeError>;
 }
 
 /// If implemented, the container can be filled with a set number of values in one operation
@@ -97,11 +89,7 @@ pub trait StackAnyContainer: StackContainer<TaggedCellPtr> {
 /// Generic indexed-access trait. If implemented, the container can function as an indexable vector
 pub trait IndexedContainer<T: Sized + Clone>: Container<T> {
     /// Return a copy of the object at the given index. Bounds-checked.
-    fn get(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        index: ArraySize,
-    ) -> Result<T, RuntimeError>;
+    fn get(&self, _guard: &'_ dyn MutatorScope, index: ArraySize) -> Result<T, RuntimeError>;
 
     /// Move an object into the array at the given index. Bounds-checked.
     fn set(

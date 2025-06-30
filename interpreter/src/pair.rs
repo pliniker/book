@@ -66,11 +66,7 @@ impl Pair {
 }
 
 impl Print for Pair {
-    fn print(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         let mut tail = ScopedPtr::new(guard, self);
 
         write!(f, "({}", tail.first.get(guard))?;
@@ -91,11 +87,7 @@ impl Print for Pair {
     }
 
     // In debug print, use dot notation
-    fn debug(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn debug(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "({:?} . {:?})",

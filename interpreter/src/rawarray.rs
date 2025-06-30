@@ -53,10 +53,7 @@ impl<T: Sized> RawArray<T> {
 
     /// Return a RawArray of the given capacity number of bytes allocated
     // ANCHOR: DefRawArrayWithCapacity
-    pub fn with_capacity(
-        mem: &'_ MutatorView,
-        capacity: u32,
-    ) -> Result<RawArray<T>, RuntimeError> {
+    pub fn with_capacity(mem: &'_ MutatorView, capacity: u32) -> Result<RawArray<T>, RuntimeError> {
         // convert to bytes, checking for possible overflow of ArraySize limit
         let capacity_bytes = capacity
             .checked_mul(size_of::<T>() as ArraySize)
@@ -72,11 +69,7 @@ impl<T: Sized> RawArray<T> {
     /// Resize the array to the new capacity
     /// TODO the inner implementation of this should live in the allocator API to make
     /// better use of optimizations
-    pub fn resize(
-        &mut self,
-        mem: &'_ MutatorView,
-        new_capacity: u32,
-    ) -> Result<(), RuntimeError> {
+    pub fn resize(&mut self, mem: &'_ MutatorView, new_capacity: u32) -> Result<(), RuntimeError> {
         // If we're reducing the capacity to 0, simply detach the array pointer
         if new_capacity == 0 {
             self.capacity = 0;

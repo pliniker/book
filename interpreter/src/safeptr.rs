@@ -46,7 +46,7 @@ impl<T: Sized> MutatorScope for ScopedPtr<'_, T> {}
 
 impl<'guard, T: Sized> Clone for ScopedPtr<'guard, T> {
     fn clone(&self) -> ScopedPtr<'guard, T> {
-       *self 
+        *self
     }
 }
 
@@ -81,7 +81,6 @@ impl<'guard, T: Sized + PartialEq> PartialEq for ScopedPtr<'guard, T> {
 pub trait AsScopedPtr<T> {
     fn scoped_ptr<'scope>(&self, guard: &'scope dyn MutatorScope) -> ScopedPtr<'scope, T>;
 }
-
 
 /// A wrapper around untagged raw pointers for storing compile-time typed pointers in
 /// data structures that are not expected to change in pointer value, i.e. once the

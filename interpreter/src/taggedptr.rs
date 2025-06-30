@@ -23,7 +23,9 @@ use crate::list::List;
 use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
-use crate::pointerops::{get_tag, AsScopedRef, Tagged, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL};
+use crate::pointerops::{
+    get_tag, AsScopedRef, Tagged, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL,
+};
 use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr};
 use crate::symbol::Symbol;

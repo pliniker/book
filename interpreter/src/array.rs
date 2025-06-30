@@ -117,11 +117,7 @@ impl<T: Sized + Clone> Array<T> {
 
     /// Bounds-checked read
     // ANCHOR: DefArrayRead
-    fn read(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        index: ArraySize,
-    ) -> Result<T, RuntimeError> {
+    fn read(&self, _guard: &'_ dyn MutatorScope, index: ArraySize) -> Result<T, RuntimeError> {
         unsafe {
             let dest = self.get_offset(index)?;
             Ok(read(dest))
@@ -178,10 +174,7 @@ impl<T: Sized + Clone> Container<T> for Array<T> {
         }
     }
 
-    fn with_capacity(
-        mem: &'_ MutatorView,
-        capacity: ArraySize,
-    ) -> Result<Array<T>, RuntimeError> {
+    fn with_capacity(mem: &'_ MutatorView, capacity: ArraySize) -> Result<Array<T>, RuntimeError> {
         Ok(Array {
             length: Cell::new(0),
             data: Cell::new(RawArray::with_capacity(mem, capacity)?),
@@ -207,12 +200,7 @@ impl<T: Sized + Clone> FillContainer<T> for Array<T> {
     /// Increase the size of the array to `size` and fill the new slots with
     /// copies of `item`. If `size` is less than the current length of the array,
     /// does nothing.
-    fn fill(
-        &self,
-        mem: &'_ MutatorView,
-        size: ArraySize,
-        item: T,
-    ) -> Result<(), RuntimeError> {
+    fn fill(&self, mem: &'_ MutatorView, size: ArraySize, item: T) -> Result<(), RuntimeError> {
         if self.borrow.get() != INTERIOR_ONLY {
             return Err(RuntimeError::new(ErrorKind::MutableBorrowError));
         }
@@ -311,11 +299,7 @@ impl<T: Sized + Clone> StackContainer<T> for Array<T> {
 
 impl<T: Sized + Clone> IndexedContainer<T> for Array<T> {
     /// Return a copy of the object at the given index. Bounds-checked.
-    fn get(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        index: ArraySize,
-    ) -> Result<T, RuntimeError> {
+    fn get(&self, guard: &'_ dyn MutatorScope, index: ArraySize) -> Result<T, RuntimeError> {
         self.read(guard, index)
     }
 
@@ -348,11 +332,7 @@ impl<T: Sized + Clone> SliceableContainer<T> for Array<T> {
 pub type ArrayU8 = Array<u8>;
 
 impl Print for ArrayU8 {
-    fn print(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, _guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ArrayU8[...]")
     }
 }
@@ -361,11 +341,7 @@ impl Print for ArrayU8 {
 pub type ArrayU16 = Array<u16>;
 
 impl Print for ArrayU16 {
-    fn print(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, _guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ArrayU16[...]")
     }
 }
@@ -374,11 +350,7 @@ impl Print for ArrayU16 {
 pub type ArrayU32 = Array<u32>;
 
 impl Print for ArrayU32 {
-    fn print(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, _guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ArrayU32[...]")
     }
 }
@@ -529,11 +501,7 @@ impl AnyContainerFromSlice for Array<TaggedCellPtr> {
 }
 
 impl Print for Array<TaggedCellPtr> {
-    fn print(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[")?;
 
         for i in 0..self.length() {

@@ -11,11 +11,7 @@ pub struct NumberObject {
 }
 
 impl Print for NumberObject {
-    fn print(
-        &self,
-        _guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, _guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO
         write!(f, "NumberObject(nan)")
     }

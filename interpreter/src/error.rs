@@ -45,10 +45,7 @@ pub struct RuntimeError {
 
 impl RuntimeError {
     pub fn new(kind: ErrorKind) -> RuntimeError {
-        RuntimeError {
-            kind,
-            pos: None,
-        }
+        RuntimeError { kind, pos: None }
     }
 
     pub fn with_pos(kind: ErrorKind, pos: SourcePos) -> RuntimeError {

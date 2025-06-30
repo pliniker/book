@@ -57,5 +57,3 @@ impl<T> AsScopedRef<T> for RawPtr<T> {
     }
 }
 // ANCHOR_END: DefScopedRef
-
-

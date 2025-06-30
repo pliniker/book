@@ -104,11 +104,7 @@ impl Function {
 
 impl Print for Function {
     /// Prints a string representation of the function
-    fn print(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         let name = self.name.get(guard);
         let params = self.param_names.get(guard);
 
@@ -124,11 +120,7 @@ impl Print for Function {
     }
 
     /// Prints the disassembled bytecode
-    fn debug(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn debug(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         self.print(guard, f)?;
         write!(f, "\nbytecode follows:\n")?;
         self.code(guard).debug(guard, f)
@@ -236,11 +228,7 @@ impl Partial {
 
 impl Print for Partial {
     /// Prints a string representation of the Partial object
-    fn print(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn print(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         let function = self.func.get(guard);
         let name = function.name.get(guard);
         let params = function.param_names.get(guard);
@@ -258,14 +246,9 @@ impl Print for Partial {
     }
 
     /// Prints the associated function's disassembled bytecode
-    fn debug(
-        &self,
-        guard: &'_ dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn debug(&self, guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         self.print(guard, f)?;
         write!(f, "\nbytecode follows:\n")?;
         self.func.get(guard).code(guard).debug(guard, f)
     }
 }
-
