@@ -21,8 +21,8 @@ jobs:
         working-directory: ./blockalloc
         run: cargo fmt --all -- --check
 
-      - name: Cargo fmt check stickyimmix
-        working-directory: ./stickyimmix
+      - name: Cargo fmt check immixcons
+        working-directory: ./immixcons
         run: cargo fmt --all -- --check
 
       - name: Cargo fmt check interpreter
@@ -33,8 +33,8 @@ jobs:
         working-directory: ./blockalloc
         run: cargo test
 
-      - name: Cargo test stickyimmix
-        working-directory: ./stickyimmix
+      - name: Cargo test immixcons
+        working-directory: ./immixcons
         run: cargo test
 
       - name: Cargo test interpreter
