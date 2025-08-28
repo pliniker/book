@@ -20,14 +20,14 @@ original [Immix paper][1]. This size can be any power of two though and
 different use cases may show different optimal sizes.
 
 ```rust,ignore
-{{#include ../stickyimmix/src/constants.rs:ConstBlockSize}}
+{{#include ../immixcons/src/constants.rs:ConstBlockSize}}
 ```
 
 Now we'll define a struct that wraps the block with a bump pointer and garbage
 collection metadata:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/bumpblock.rs:DefBumpBlock}}
+{{#include ../immixcons/src/bumpblock.rs:DefBumpBlock}}
 ```
 
 ## Bump allocation basics
@@ -118,7 +118,7 @@ but first some constants that we need in order to know
 - how many bytes remain in the `Block` for allocating into
 
 ```rust,ignore
-{{#include ../stickyimmix/src/constants.rs:ConstLineSize}}
+{{#include ../immixcons/src/constants.rs:ConstLineSize}}
 ```
 
 For clarity, let's put some numbers to the definitions we've made so far:
@@ -141,7 +141,7 @@ The definition of `BumpBlock` contains member `meta` which is of type
 need to represent a pointer to the line mark section at the end of the `Block`:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/blockmeta.rs:DefBlockMeta}}
+{{#include ../immixcons/src/blockmeta.rs:DefBlockMeta}}
 ```
 
 This pointer could be easily calculated, of course, so this is just a handy
@@ -154,7 +154,7 @@ shortcut.
 The struct `BlockMeta` contains one function we will study:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/blockmeta.rs:DefFindNextHole}}
+{{#include ../immixcons/src/blockmeta.rs:DefFindNextHole}}
 ```
 
 The purpose of this function is to locate a gap of unmarked lines of sufficient
@@ -288,7 +288,7 @@ reached the end of the block, exhausting our options.
 The new definition of `BumpBlock::inner_alloc()` reads as follows:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/bumpblock.rs:DefBumpBlockAlloc}}
+{{#include ../immixcons/src/bumpblock.rs:DefBumpBlockAlloc}}
 ```
 
 and as you can see, this implementation is recursive.

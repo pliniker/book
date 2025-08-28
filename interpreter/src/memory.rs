@@ -2,7 +2,7 @@
 ///
 /// Defines Stack, Heap and Memory types, and a MemoryView type that gives a mutator a safe
 /// view into the stack and heap.
-use stickyimmix::{AllocObject, AllocRaw, ArraySize, RawPtr, StickyImmixHeap};
+use immixcons::{AllocObject, AllocRaw, ArraySize, RawPtr, StickyImmixHeap};
 
 use crate::error::RuntimeError;
 use crate::headers::{ObjectHeader, TypeList};

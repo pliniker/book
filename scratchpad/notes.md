@@ -1,10 +1,19 @@
 # Notes
 
+## TODOs
+
+- [ ] replace Pairs with Arrays in parser and compiler
+- [ ] implement some additional builtins - math operators, strings
+- [ ] implement some integration tests
+- [ ] conservative immix
+
+## Conservative Immix
+
 - https://www.steveblackburn.org/pubs/papers/consrc-oopsla-2014.pdf
 - https://docs.rs/portable-atomic/latest/portable_atomic/struct.AtomicUsize.html
 - https://www.hboehm.info/gc/gcdescr.html
 
-## Rooting
+### Rooting
 
 Conservative stack scanning.
 - allows for intrusive data structures _where used_
@@ -23,7 +32,7 @@ Depends on:
 - object map in each block
   - FIRST step, implement object block
 
-## Tracing
+### Tracing
 
 Precise object scanning. OR could it be conservative?
 

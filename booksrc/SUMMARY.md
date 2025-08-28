@@ -5,7 +5,7 @@
   - [Alignment](./chapter-alignment.md)
   - [Obtaining blocks of memory](./chapter-blocks.md)
   - [The type of allocation](./chapter-what-is-alloc.md)
-- [An allocator: Sticky Immix](./part-stickyimmix.md)
+- [An allocator: Sticky Immix](./part-immixcons.md)
   - [Bump allocation](./chapter-simple-bump.md)
   - [Allocating into multiple blocks](./chapter-managing-blocks.md)
   - [Defining the allocation API](./chapter-allocation-api.md)

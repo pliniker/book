@@ -14,7 +14,7 @@
 use std::fmt;
 use std::ptr::NonNull;
 
-use stickyimmix::{AllocRaw, RawPtr};
+use immixcons::{AllocRaw, RawPtr};
 
 use crate::array::{ArrayU16, ArrayU32, ArrayU8};
 use crate::dict::Dict;
@@ -199,7 +199,7 @@ impl From<isize> for FatPtr {
 // ANCHOR: FromTaggedPtrForFatPtr
 impl From<TaggedPtr> for FatPtr {
     fn from(ptr: TaggedPtr) -> FatPtr {
-        ptr.into_fat_ptr()
+        ptr.as_fat_ptr()
     }
 }
 // ANCHOR_END: FromTaggedPtrForFatPtr
@@ -288,7 +288,7 @@ impl TaggedPtr {
     }
 
     // ANCHOR: DefTaggedPtrIntoFatPtr
-    fn into_fat_ptr(&self) -> FatPtr {
+    fn as_fat_ptr(&self) -> FatPtr {
         unsafe {
             if self.tag == 0 {
                 FatPtr::Nil

@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::ptr::NonNull;
 use std::slice::from_raw_parts_mut;
 
-pub use stickyimmix::ArraySize;
+pub use immixcons::ArraySize;
 
 use crate::error::{ErrorKind, RuntimeError};
 use crate::memory::MutatorView;

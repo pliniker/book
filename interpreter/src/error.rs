@@ -5,7 +5,7 @@ use std::io;
 use rustyline::error::ReadlineError;
 
 use blockalloc::BlockError;
-use stickyimmix::AllocError;
+use immixcons::AllocError;
 
 /// Source code position
 // ANCHOR: DefSourcePos

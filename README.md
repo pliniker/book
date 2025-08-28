@@ -12,7 +12,7 @@ interpreter in Rust including:
 
 ## Project vision
 
-From CPython to Ruby's YARV, V8 and SpiderMonkey, GHC to the JVM, most language
+From Python to Ruby, V8 and SpiderMonkey, GHC to the JVM, most language
 runtimes are written in C/C++.
 
 Rust is eminently suitable for implementing languages and can provide

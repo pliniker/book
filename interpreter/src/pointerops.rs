@@ -1,7 +1,7 @@
 /// Miscelaneous pointer operations
 use std::ptr::NonNull;
 
-use stickyimmix::RawPtr;
+use immixcons::RawPtr;
 
 use crate::safeptr::MutatorScope;
 

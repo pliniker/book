@@ -6,7 +6,7 @@ defined in the Sticky Immix crate.
 Let's first recall this interface:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/allocator.rs:DefAllocRaw}}
+{{#include ../immixcons/src/allocator.rs:DefAllocRaw}}
 ```
 
 These are the functions we'll be calling. When we allocate an object, we'll get

@@ -2,7 +2,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use stickyimmix::{AllocRaw, RawPtr};
+use immixcons::{AllocRaw, RawPtr};
 
 use crate::arena::Arena;
 use crate::symbol::Symbol;

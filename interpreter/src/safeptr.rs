@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::fmt;
 use std::ops::Deref;
 
-use stickyimmix::{AllocObject, RawPtr};
+use immixcons::{AllocObject, RawPtr};
 
 use crate::headers::TypeList;
 use crate::pointerops::AsScopedRef;

@@ -4,7 +4,7 @@ extern crate dirs;
 extern crate fnv;
 extern crate itertools;
 extern crate rustyline;
-extern crate stickyimmix;
+extern crate immixcons;
 
 use std::fs::File;
 use std::io;

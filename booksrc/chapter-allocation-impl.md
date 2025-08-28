@@ -29,7 +29,7 @@ Let's look at the implementation.
 
 ```rust,ignore
 impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
-{{#include ../stickyimmix/src/heap.rs:DefAlloc}}
+{{#include ../immixcons/src/heap.rs:DefAlloc}}
 }
 ```
 
@@ -49,7 +49,7 @@ write into the array itself.
 
 ```rust,ignore
 impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
-{{#include ../stickyimmix/src/heap.rs:DefAllocArray}}
+{{#include ../immixcons/src/heap.rs:DefAllocArray}}
 }
 ```
 
@@ -69,7 +69,7 @@ pointer.
 
 ```rust,ignore
 impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
-{{#include ../stickyimmix/src/heap.rs:DefGetHeader}}
+{{#include ../immixcons/src/heap.rs:DefGetHeader}}
 }
 ```
 
@@ -78,7 +78,7 @@ to the header pointer results in the object pointer:
 
 ```rust,ignore
 impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
-{{#include ../stickyimmix/src/heap.rs:DefGetObject}}
+{{#include ../immixcons/src/heap.rs:DefGetObject}}
 }
 ```
 

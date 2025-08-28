@@ -1,7 +1,7 @@
 /// Container traits
 ///
 /// TODO iterators/views
-use stickyimmix::ArraySize;
+use immixcons::ArraySize;
 
 use crate::error::RuntimeError;
 use crate::memory::MutatorView;

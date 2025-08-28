@@ -1,9 +1,9 @@
 /// A memory arena implemented as an ever growing pool of blocks.
-/// Currently implemented on top of stickyimmix without any gc which includes unnecessary
+/// Currently implemented on top of immixcons without any gc which includes unnecessary
 /// overhead.
 use std::ptr::NonNull;
 
-use stickyimmix::{
+use immixcons::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, RawPtr, SizeClass,
     StickyImmixHeap,
 };

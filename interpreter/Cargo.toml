@@ -11,5 +11,5 @@ dirs = "1.0"
 fnv = "1.0.3"
 itertools = "0.9"
 rustyline = "6.1.2"
-stickyimmix = { path = "../stickyimmix" }
+immixcons = { path = "../immixcons" }
 blockalloc = { path = "../blockalloc" }

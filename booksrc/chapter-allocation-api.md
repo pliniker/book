@@ -28,7 +28,7 @@ than checking a pointer for being null. We'll allow for distinguishing between
 Out Of Memory and an allocation request that for whatever reason is invalid.
 
 ```rust,ignore
-{{#include ../stickyimmix/src/allocator.rs:DefAllocError}}
+{{#include ../immixcons/src/allocator.rs:DefAllocError}}
 ```
 
 The second change is that instead of a `*const T` value in the success
@@ -37,7 +37,7 @@ will amount to little more than containing a `std::ptr::NonNull` instance
 and some functions to access the pointer.
 
 ```rust,ignore
-{{#include ../stickyimmix/src/rawptr.rs:DefRawPtr}}
+{{#include ../immixcons/src/rawptr.rs:DefRawPtr}}
 ```
 
 This'll be better to work with on the user-of-the-crate side.
@@ -63,7 +63,7 @@ collector in _this_ crate need.
 We'll define a trait for the user to implement.
 
 ```rust,ignore
-{{#include ../stickyimmix/src/allocator.rs:DefAllocHeader}}
+{{#include ../immixcons/src/allocator.rs:DefAllocHeader}}
 ```
 
 Now we have a bunch more questions to answer! Some of these trait methods are
@@ -95,7 +95,7 @@ pub trait AllocHeader: Sized {
 where `AllocTypeId` is define simply as:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/allocator.rs:DefAllocTypeId}}
+{{#include ../immixcons/src/allocator.rs:DefAllocTypeId}}
 ```
 
 This means the interpreter is free to implement a type identifier type however
@@ -124,7 +124,7 @@ header is being instantiated for.
 And what is `AllocObject`? Simply:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/allocator.rs:DefAllocObject}}
+{{#include ../immixcons/src/allocator.rs:DefAllocObject}}
 ```
 
 In summary, we have:
@@ -367,7 +367,7 @@ pub trait AllocRaw {
 Our complete `AllocRaw` trait definition now looks like this:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/allocator.rs:DefAllocRaw}}
+{{#include ../immixcons/src/allocator.rs:DefAllocRaw}}
 ```
 
 In the next chapter we'll build out the `AllocRaw` trait implementation.

@@ -8,7 +8,7 @@ blocks so we can allocate - in theory - indefinitely.
 We'll need a new struct for wrapping multiple blocks:
 
 ```rust,ignore
-{{#include ../stickyimmix/src/heap.rs:DefBlockList}}
+{{#include ../immixcons/src/heap.rs:DefBlockList}}
 ```
 
 Immix maintains several lists of blocks. We won't include them all in the first
@@ -172,7 +172,7 @@ struct definition below there is reference to a generic type `H` that
 the _user_ of the heap will define as the object header.
 
 ```rust,ignore
-{{#include ../stickyimmix/src/heap.rs:DefStickyImmixHeap}}
+{{#include ../immixcons/src/heap.rs:DefStickyImmixHeap}}
 ```
 
 Since object headers are not owned directly by the heap struct, we need a

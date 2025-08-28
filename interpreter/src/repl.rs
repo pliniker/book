@@ -26,7 +26,7 @@ fn get_reader(history_file: &Option<String>) -> Editor<()> {
     // Try to load the repl history file
     if let Some(ref path) = history_file {
         if let Err(err) = reader.load_history(&path) {
-            eprintln!("Could not read history: {}", err);
+            eprintln!("Could not read history: {err}");
         }
     }
 
@@ -47,15 +47,14 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
 
         if debug {
             println!(
-                "# Debug\n## Input:\n```\n{}\n```\n## Parsed:\n```\n{:?}\n```",
-                line, value
+                "# Debug\n## Input:\n```\n{line}\n```\n## Parsed:\n```\n{value:?}\n```"
             );
         }
 
         let function = compile(mem, value)?;
 
         if debug {
-            println!("## Compiled:\n```\n{:?}\n```", function);
+            println!("## Compiled:\n```\n{function:?}\n```");
         }
 
         let mut status = thread.start_exec(mem, function)?;
@@ -67,13 +66,13 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
         };
 
         if debug {
-            println!("## Evaluated:\n```\n{:?}\n```\n", value);
+            println!("## Evaluated:\n```\n{value:?}\n```\n");
         }
 
         Ok(value)
     })(mem, line)
     {
-        Ok(value) => println!("{}", value),
+        Ok(value) => println!("{value}"),
 
         Err(e) => {
             match e.error_kind() {
@@ -110,7 +109,7 @@ pub fn repl(mem: &MutatorView) -> Result<(), RuntimeError> {
             Err(e) => {
                 if let Some(ref path) = history_file {
                     reader.save_history(&path).unwrap_or_else(|err| {
-                        eprintln!("could not save input history in {}: {}", path, err);
+                        eprintln!("could not save input history in {path}: {err}");
                     });
                 }
 

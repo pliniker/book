@@ -9,7 +9,7 @@ use std::fmt;
 use std::ptr::{read, write};
 use std::slice::from_raw_parts_mut;
 
-pub use stickyimmix::{AllocObject, ArraySize};
+pub use immixcons::{AllocObject, ArraySize};
 
 use crate::containers::{
     AnyContainerFromPairList, AnyContainerFromSlice, Container, ContainerFromSlice,

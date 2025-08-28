@@ -5,7 +5,7 @@ name = "blockalloc"
 version = "0.1.0"
 
 [[package]]
-name = "stickyimmix"
+name = "immixcons"
 version = "0.1.0"
 dependencies = [
  "blockalloc 0.1.0",
