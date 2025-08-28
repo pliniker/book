@@ -2,9 +2,9 @@ extern crate blockalloc;
 extern crate clap;
 extern crate dirs;
 extern crate fnv;
+extern crate immixcons;
 extern crate itertools;
 extern crate rustyline;
-extern crate immixcons;
 
 use std::fs::File;
 use std::io;

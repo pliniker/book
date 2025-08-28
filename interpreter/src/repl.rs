@@ -46,9 +46,7 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
         let value = parse(mem, line)?;
 
         if debug {
-            println!(
-                "# Debug\n## Input:\n```\n{line}\n```\n## Parsed:\n```\n{value:?}\n```"
-            );
+            println!("# Debug\n## Input:\n```\n{line}\n```\n## Parsed:\n```\n{value:?}\n```");
         }
 
         let function = compile(mem, value)?;
