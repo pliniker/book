@@ -67,7 +67,7 @@ impl CallFrame {
     /// Return a string representation of this stack frame
     fn as_string(&self, guard: &'_ dyn MutatorScope) -> String {
         let function = self.function.get(guard);
-        format!("in {}", function)
+        format!("in {function}")
     }
 }
 
@@ -440,8 +440,7 @@ impl Thread {
                             Ok(binding) => window[dest as usize].set(binding),
                             Err(_) => {
                                 return Err(err_eval(&format!(
-                                    "Symbol {} is not bound to a value",
-                                    name_val
+                                    "Symbol {name_val} is not bound to a value"
                                 )))
                             }
                         }
