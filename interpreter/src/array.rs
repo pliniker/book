@@ -644,7 +644,7 @@ mod test {
 
             for n in 1..12 {
                 if let Value::Pair(pair) = *tail {
-                    tail = pair.append(view, view.lookup_sym(&format!("thing{}", n)))?;
+                    tail = pair.append(view, view.lookup_sym(&format!("thing{n}")))?;
                 } else {
                     panic!("expected pair!")
                 }
@@ -656,7 +656,7 @@ mod test {
                 let thing = IndexedAnyContainer::get(&*array, view, n)?;
 
                 match *thing {
-                    Value::Symbol(s) => assert!(s.as_str(view) == format!("thing{}", n)),
+                    Value::Symbol(s) => assert!(s.as_str(view) == format!("thing{n}")),
                     _ => panic!("expected symbol!"),
                 }
             }

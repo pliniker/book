@@ -71,7 +71,7 @@ impl RuntimeError {
             for (count, line) in iter {
                 // count starts at 0, line numbers start at 1
                 if count + 1 == pos.line as usize {
-                    println!("error: {}", self);
+                    println!("error: {self}");
                     println!("{:5}|{}", pos.line, line);
                     println!("{:5}|{:width$}^", " ", " ", width = pos.column as usize);
                     println!("{:5}|", " ");
@@ -79,7 +79,7 @@ impl RuntimeError {
                 }
             }
         } else {
-            println!("error: {}", self);
+            println!("error: {self}");
         }
     }
 }
@@ -87,10 +87,10 @@ impl RuntimeError {
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
-            ErrorKind::IOError(ref reason) => write!(f, "IO Error: {}", reason),
-            ErrorKind::LexerError(ref reason) => write!(f, "Parse error: {}", reason),
-            ErrorKind::ParseError(ref reason) => write!(f, "Parse error: {}", reason),
-            ErrorKind::EvalError(ref reason) => write!(f, "Evaluation error: {}", reason),
+            ErrorKind::IOError(ref reason) => write!(f, "IO Error: {reason}"),
+            ErrorKind::LexerError(ref reason) => write!(f, "Parse error: {reason}"),
+            ErrorKind::ParseError(ref reason) => write!(f, "Parse error: {reason}"),
+            ErrorKind::EvalError(ref reason) => write!(f, "Evaluation error: {reason}"),
             ErrorKind::OutOfMemory => write!(f, "Out of memory!"),
             ErrorKind::BadAllocationRequest => {
                 write!(f, "An invalid memory size allocation was requested!")
@@ -109,14 +109,14 @@ impl fmt::Display for RuntimeError {
 /// Convert from io::Error
 impl From<io::Error> for RuntimeError {
     fn from(other: io::Error) -> RuntimeError {
-        RuntimeError::new(ErrorKind::IOError(format!("{}", other)))
+        RuntimeError::new(ErrorKind::IOError(format!("{other}")))
     }
 }
 
 /// Convert from ReadlineError
 impl From<ReadlineError> for RuntimeError {
     fn from(other: ReadlineError) -> RuntimeError {
-        RuntimeError::new(ErrorKind::IOError(format!("{}", other)))
+        RuntimeError::new(ErrorKind::IOError(format!("{other}")))
     }
 }
 

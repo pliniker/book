@@ -47,7 +47,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, RuntimeError> {
 
     // characters that terminate a symbol
     let terminating = [OPEN_PAREN, CLOSE_PAREN, SPACE, TAB, CR, LF, DOUBLE_QUOTE];
-    let is_terminating = |c: char| terminating.iter().any(|t| c == *t);
+    let is_terminating = |c: char| terminating.contains(&c);
 
     // return value
     let mut tokens = Vec::new();

@@ -250,10 +250,10 @@ impl Print for ByteCode {
         let mut instr_str = String::new();
 
         self.code.access_slice(guard, |code| {
-            instr_str = join(code.iter().map(|opcode| format!("{:?}", opcode)), "\n")
+            instr_str = join(code.iter().map(|opcode| format!("{opcode:?}")), "\n")
         });
 
-        write!(f, "{}", instr_str)
+        write!(f, "{instr_str}")
     }
 }
 

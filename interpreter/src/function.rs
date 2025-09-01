@@ -115,7 +115,7 @@ impl Print for Function {
 
         match *name {
             Value::Symbol(s) => write!(f, "(Function {} ({}))", s.as_str(guard), param_string),
-            _ => write!(f, "(Function ({}))", param_string),
+            _ => write!(f, "(Function ({param_string}))"),
         }
     }
 
@@ -163,7 +163,7 @@ impl Partial {
         };
 
         // copy args to the Partial's own list
-        let args_list: ScopedPtr<'guard, List> = ContainerFromSlice::from_slice(mem, &args)?;
+        let args_list: ScopedPtr<'guard, List> = ContainerFromSlice::from_slice(mem, args)?;
 
         mem.alloc(Partial {
             arity,
@@ -241,7 +241,7 @@ impl Print for Partial {
 
         match *name {
             Value::Symbol(s) => write!(f, "(Partial {} ({}))", s.as_str(guard), param_string),
-            _ => write!(f, "(Partial ({}))", param_string),
+            _ => write!(f, "(Partial ({param_string}))"),
         }
     }
 

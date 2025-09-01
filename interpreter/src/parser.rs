@@ -231,7 +231,7 @@ where
             pos: _,
         }) => {
             tokens.next();
-            let text = mem.alloc_tagged(text::Text::new_from_str(mem, &string)?)?;
+            let text = mem.alloc_tagged(text::Text::new_from_str(mem, string)?)?;
             Ok(text)
         }
 

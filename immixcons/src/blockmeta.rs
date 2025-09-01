@@ -49,7 +49,7 @@ impl BlockMeta {
         }
     }
 
-    /// Return an iterator over all the line mark flags
+    // Return an iterator over all the line mark flags
     //pub fn line_iter(&self) -> impl Iterator<Item = &'_ bool> {
     //    self.line_mark.iter()
     //}
@@ -128,7 +128,7 @@ mod tests {
 
         let got = meta.find_next_available_hole(10 * constants::LINE_SIZE, constants::LINE_SIZE);
 
-        println!("test_find_next_hole got {:?} expected {:?}", got, expect);
+        println!("test_find_next_hole got {got:?} expected {expect:?}");
 
         assert!(got == expect);
     }
@@ -147,10 +147,7 @@ mod tests {
 
         let got = meta.find_next_available_hole(3 * constants::LINE_SIZE, constants::LINE_SIZE);
 
-        println!(
-            "test_find_next_hole_at_line_zero got {:?} expected {:?}",
-            got, expect
-        );
+        println!("test_find_next_hole_at_line_zero got {got:?} expected {expect:?}");
 
         assert!(got == expect);
     }
@@ -173,10 +170,7 @@ mod tests {
 
         let got = meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE);
 
-        println!(
-            "test_find_next_hole_at_block_end got {:?} expected {:?}",
-            got, expect
-        );
+        println!("test_find_next_hole_at_block_end got {got:?} expected {expect:?}");
 
         assert!(got == expect);
     }
@@ -197,12 +191,8 @@ mod tests {
 
         let got = meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE);
 
-        println!(
-            "test_find_hole_all_conservatively_marked got {:?} expected None",
-            got
-        );
-
-        assert!(got == None);
+        println!("test_find_hole_all_conservatively_marked got {got:?} expected None");
+        assert!(got.is_none());
     }
 
     #[test]
@@ -214,7 +204,7 @@ mod tests {
         let expect = Some((constants::BLOCK_CAPACITY, 0));
         let got = meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE);
 
-        println!("test_find_entire_block got {:?} expected {:?}", got, expect);
+        println!("test_find_entire_block got {got:?} expected {expect:?}");
 
         assert!(got == expect);
     }

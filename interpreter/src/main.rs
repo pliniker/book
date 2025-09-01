@@ -74,7 +74,7 @@ fn main() {
     if let Some(filename) = matches.value_of("filename") {
         // if a filename was specified, read it into a String
         read_file(filename).unwrap_or_else(|err| {
-            eprintln!("Terminated: {}", err);
+            eprintln!("Terminated: {err}");
             process::exit(1);
         });
         // TODO
@@ -83,7 +83,7 @@ fn main() {
         let mem = Memory::new();
         let result = mem.enter(repl);
         result.unwrap_or_else(|err| {
-            eprintln!("Terminated: {}", err);
+            eprintln!("Terminated: {err}");
             process::exit(1);
         });
     }

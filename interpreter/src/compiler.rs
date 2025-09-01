@@ -867,9 +867,9 @@ mod integration {
         code: &str,
     ) -> Result<TaggedScopedPtr<'guard>, RuntimeError> {
         let compiled_code = compile(mem, parse(mem, code)?)?;
-        println!("RUN CODE {}", code);
+        println!("RUN CODE {code}");
         let result = thread.exec(mem, compiled_code)?;
-        println!("RUN RESULT {}", result);
+        println!("RUN RESULT {result}");
         Ok(result)
     }
 
@@ -1076,7 +1076,7 @@ mod integration {
             let sym_x = mem.lookup_sym("x");
             let sym_y = mem.lookup_sym("y");
             let sym_z = mem.lookup_sym("z");
-            assert!(result == &[sym_x, sym_y, sym_z, sym_z, sym_y]);
+            assert!(result == [sym_x, sym_y, sym_z, sym_z, sym_y]);
 
             Ok(())
         }

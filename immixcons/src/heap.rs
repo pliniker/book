@@ -73,7 +73,7 @@ impl BlockList {
 
                 space
             }
-        } as *const u8;
+        };
 
         Ok(space)
     }
@@ -152,7 +152,7 @@ impl<H> StickyImmixHeap<H> {
 
                 space
             }
-        } as *const u8;
+        };
 
         Ok(space)
     }
@@ -191,7 +191,7 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         }
 
         // write the object into the allocated space after the header
-        let object_space = unsafe { space.offset(header_size as isize) };
+        let object_space = unsafe { space.add(header_size) };
         unsafe {
             write(object_space as *mut T, object);
         }
@@ -224,7 +224,7 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         }
 
         // calculate where the array will begin after the header
-        let array_space = unsafe { space.offset(header_size as isize) };
+        let array_space = unsafe { space.add(header_size) };
 
         // Initialize object_space to zero here.
         // If using the system allocator for any objects (SizeClass::Large, for example),
@@ -236,7 +236,7 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
         }
 
         // return a pointer to the array in the allocated space
-        Ok(RawPtr::new(array_space as *const u8))
+        Ok(RawPtr::new(array_space))
     }
     // ANCHOR_END: DefAllocArray
 
@@ -377,8 +377,8 @@ mod tests {
 
         // allocate a sequence of numbers
         for i in 0..(constants::BLOCK_SIZE * 3) {
-            match mem.alloc(i as usize) {
-                Err(_) => assert!(false, "Allocation failed unexpectedly"),
+            match mem.alloc(i) {
+                Err(_) => panic!("Allocation failed unexpectedly"),
                 Ok(ptr) => obs.push(ptr),
             }
         }
@@ -398,7 +398,7 @@ mod tests {
         let size = 2048;
 
         match mem.alloc_array(size) {
-            Err(_) => assert!(false, "Array allocation failed unexpectedly"),
+            Err(_) => panic!("Array allocation failed unexpectedly"),
 
             Ok(ptr) => {
                 // Validate that array is zero initialized all the way through

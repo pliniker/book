@@ -24,7 +24,7 @@ pub const ALLOC_ALIGN_BYTES: usize = 16;
 pub const ALLOC_ALIGN_MASK: usize = !(ALLOC_ALIGN_BYTES - 1);
 
 // Object size ranges
-pub const MAX_ALLOC_SIZE: usize = std::u32::MAX as usize;
+pub const MAX_ALLOC_SIZE: usize = u32::MAX as usize;
 pub const SMALL_OBJECT_MIN: usize = 1;
 pub const SMALL_OBJECT_MAX: usize = LINE_SIZE;
 pub const MEDIUM_OBJECT_MIN: usize = SMALL_OBJECT_MAX + 1;

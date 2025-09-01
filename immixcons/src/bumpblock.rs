@@ -108,20 +108,15 @@ mod tests {
         let mut v = Vec::new();
         let mut index = 0;
 
-        loop {
-            //println!("cursor={}, limit={}", b.cursor, b.limit);
-            if let Some(ptr) = b.inner_alloc(TEST_UNIT_SIZE) {
-                let u32ptr = ptr as *mut u32;
+        while let Some(ptr) = b.inner_alloc(TEST_UNIT_SIZE) {
+            let u32ptr = ptr as *mut u32;
 
-                assert!(!v.contains(&u32ptr));
+            assert!(!v.contains(&u32ptr));
 
-                v.push(u32ptr);
-                unsafe { *u32ptr = index }
+            v.push(u32ptr);
+            unsafe { *u32ptr = index }
 
-                index += 1;
-            } else {
-                break;
-            }
+            index += 1;
         }
 
         for (index, u32ptr) in v.iter().enumerate() {
@@ -140,7 +135,7 @@ mod tests {
         let count = loop_check_allocate(&mut b);
         let expect = constants::BLOCK_CAPACITY / TEST_UNIT_SIZE;
 
-        println!("expect={}, count={}", expect, count);
+        println!("expect={expect}, count={count}");
         assert!(count == expect);
     }
 
@@ -160,7 +155,7 @@ mod tests {
         let expect =
             (constants::BLOCK_CAPACITY - constants::LINE_SIZE - occupied_bytes) / TEST_UNIT_SIZE;
 
-        println!("expect={}, count={}", expect, count);
+        println!("expect={expect}, count={count}");
         assert!(count == expect);
     }
 
@@ -181,7 +176,7 @@ mod tests {
 
         let count = loop_check_allocate(&mut b);
 
-        println!("count={}", count);
+        println!("count={count}");
         assert!(count == 0);
     }
 }

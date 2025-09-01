@@ -425,20 +425,20 @@ mod test {
             let dict = Dict::with_capacity(mem, 100)?;
 
             for num in 0..50 {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 dict.assoc(mem, key, val)?;
             }
 
             for num in 0..50 {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 assert!(dict.exists(mem, key)?);
@@ -461,20 +461,20 @@ mod test {
             let dict = Dict::with_capacity(mem, 20)?;
 
             for num in 0..500 {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 dict.assoc(mem, key, val)?;
             }
 
             for num in 0..500 {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 assert!(dict.exists(mem, key)?);
@@ -498,10 +498,10 @@ mod test {
             let dict = Dict::with_capacity(mem, 100)?;
 
             for num in 0..50 {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 dict.assoc(mem, key, val)?;
@@ -509,17 +509,17 @@ mod test {
 
             // delete every other key
             for num in (0..50).step_by(2) {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
                 dict.dissoc(mem, key)?;
             }
 
             // add more stuff
             for num in 0..20 {
-                let key_name = format!("ignore_{}", num);
+                let key_name = format!("ignore_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 dict.assoc(mem, key, val)?;
@@ -527,10 +527,10 @@ mod test {
 
             // check that the originally inserted keys are discoverable or not as expected
             for num in 0..50 {
-                let key_name = format!("foo_{}", num);
+                let key_name = format!("foo_{num}");
                 let key = mem.lookup_sym(&key_name);
 
-                let val_name = format!("val_{}", num);
+                let val_name = format!("val_{num}");
                 let val = mem.lookup_sym(&val_name);
 
                 if num % 2 == 0 {

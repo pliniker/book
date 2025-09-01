@@ -68,6 +68,8 @@ impl Block {
         self.size
     }
 
+    /// # Safety
+    ///
     /// Unsafely reassemble from pointer and size
     pub unsafe fn from_raw_parts(ptr: BlockPtr, size: BlockSize) -> Block {
         Block { ptr, size }
