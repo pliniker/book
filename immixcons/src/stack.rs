@@ -1,9 +1,26 @@
-use std::slice::from_raw_parts;
-use std::mem::MaybeUninit;
 use libc::{getcontext, pthread_attr_getstack};
+use std::cell::RefCell;
+use std::hint::black_box;
+use std::mem::{size_of, MaybeUninit};
+use std::slice::from_raw_parts;
+
+struct StackItem {
+    value: usize,
+}
+
+impl StackItem {
+    fn new(value: usize) -> Self {
+        StackItem { value }
+    }
+}
+
+struct StackScannerInner {
+    scan: Vec<StackItem>,
+}
 
 pub struct SystemStackInfo {
     base: usize,
+    inner: RefCell<StackScannerInner>,
 }
 
 impl SystemStackInfo {
@@ -12,13 +29,22 @@ impl SystemStackInfo {
         let mut stack_base = MaybeUninit::zeroed();
         let mut stack_size = MaybeUninit::zeroed();
 
-        let result = unsafe { pthread_attr_getstack(context.as_mut_ptr(), stack_base.as_mut_ptr(), stack_size.as_mut_ptr()) };
+        let result = unsafe {
+            pthread_attr_getstack(
+                context.as_mut_ptr(),
+                stack_base.as_mut_ptr(),
+                stack_size.as_mut_ptr(),
+            )
+        };
 
         if result != 0 {
             panic!("could not get thread attributes!");
         }
 
-        SystemStackInfo { base: unsafe { stack_size.assume_init() } } 
+        SystemStackInfo {
+            base: unsafe { stack_size.assume_init() },
+            inner: RefCell::new(StackScannerInner { scan: Vec::new() }),
+        }
     }
 
     fn scan(&self) {
@@ -42,7 +68,6 @@ impl SystemStackInfo {
         let stack_len = (stack_top - stack_base) / word_size;
         let slice = unsafe { from_raw_parts(stack_base as *const usize, stack_len) };
 
-/*      TODO implement remainder of scan
         let stack_scan = &mut self.inner.borrow_mut().scan;
 
         for stack_item in slice {
@@ -53,7 +78,6 @@ impl SystemStackInfo {
         }
 
         black_box(&context);
-*/
     }
 }
 
