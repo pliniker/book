@@ -52,7 +52,7 @@ impl Text {
             let slice = slice::from_raw_parts(ptr, self.content.capacity() as usize);
             str::from_utf8(slice).unwrap()
         } else {
-            &""
+            ""
         }
     }
 

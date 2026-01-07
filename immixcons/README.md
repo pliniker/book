@@ -1,3 +1,3 @@
 # Single threaded sticky immix
 
-A non-evacuating single-threaded immix implementation.
+A single-threaded conservative Immix implementation.

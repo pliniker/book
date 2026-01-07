@@ -10,6 +10,7 @@ use crate::allocator::{
 use crate::bumpblock::BumpBlock;
 use crate::constants;
 use crate::rawptr::RawPtr;
+use crate::stack::SystemStackInfo;
 
 /// A list of blocks as the current block being allocated into and a list
 /// of full blocks
@@ -85,7 +86,7 @@ impl BlockList {
 // ANCHOR: DefStickyImmixHeap
 pub struct StickyImmixHeap<H> {
     blocks: UnsafeCell<BlockList>,
-
+    stack: SystemStackInfo,
     _header_type: PhantomData<*const H>,
 }
 // ANCHOR_END: DefStickyImmixHeap
@@ -94,6 +95,7 @@ impl<H> StickyImmixHeap<H> {
     pub fn new() -> StickyImmixHeap<H> {
         StickyImmixHeap {
             blocks: UnsafeCell::new(BlockList::new()),
+            stack: SystemStackInfo::new(),
             _header_type: PhantomData,
         }
     }
