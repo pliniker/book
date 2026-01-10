@@ -6,7 +6,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-clap = "2.20.3"
+clap = { version = "4.5", features = ["derive"] }
 dirs = "1.0"
 fnv = "1.0.3"
 itertools = "0.9"

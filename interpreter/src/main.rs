@@ -1,17 +1,9 @@
-extern crate blockalloc;
-extern crate clap;
-extern crate dirs;
-extern crate fnv;
-extern crate immixcons;
-extern crate itertools;
-extern crate rustyline;
-
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::process;
 
-use clap::{App, Arg};
+use clap::Parser;
 
 mod arena;
 mod array;
@@ -60,20 +52,22 @@ fn read_file(filename: &str) -> Result<String, RuntimeError> {
     Ok(contents)
 }
 
-fn main() {
-    // parse command line argument, an optional filename
-    let matches = App::new("Eval-R-Us")
-        .about("Evaluate expressions")
-        .arg(
-            Arg::with_name("filename")
-                .help("Optional filename to read in")
-                .index(1),
-        )
-        .get_matches();
+/// Evaluate expressions
+#[derive(Parser)]
+#[command(name = "Eval-R-Us")]
+#[command(version)]
+#[command(about = "Evaluate expressions", long_about = None)]
+struct Cli {
+    /// Optional filename to read in
+    filename: Option<String>,
+}
 
-    if let Some(filename) = matches.value_of("filename") {
+fn main() {
+    let cli = Cli::parse();
+
+    if let Some(filename) = cli.filename {
         // if a filename was specified, read it into a String
-        read_file(filename).unwrap_or_else(|err| {
+        read_file(&filename).unwrap_or_else(|err| {
             eprintln!("Terminated: {err}");
             process::exit(1);
         });
