@@ -4,6 +4,7 @@ use crate::constants;
 // ANCHOR: DefBlockMeta
 pub struct BlockMeta {
     lines: *mut u8,
+    object_map: *mut u8,
 }
 // ANCHOR_END: DefBlockMeta
 
@@ -13,6 +14,7 @@ impl BlockMeta {
     pub fn new(block_ptr: *const u8) -> BlockMeta {
         let mut meta = BlockMeta {
             lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *mut u8 },
+            object_map: unsafe { block_ptr.add(constants::OBJECT_MAP_START) as *mut u8 },
         };
 
         meta.reset();
@@ -46,7 +48,75 @@ impl BlockMeta {
             for i in 0..constants::LINE_COUNT {
                 *self.lines.add(i) = 0;
             }
+            // Reset object map
+            for i in 0..constants::OBJECT_MAP_SIZE {
+                *self.object_map.add(i) = 0;
+            }
         }
+    }
+
+    /// Mark an object allocation at the given byte offset within the block.
+    /// The offset should be aligned to ALLOC_ALIGN_BYTES.
+    pub fn mark_object(&mut self, offset: usize) {
+        debug_assert!(offset < constants::BLOCK_CAPACITY);
+        debug_assert!(offset & !constants::ALLOC_ALIGN_MASK == 0);
+
+        let slot = offset / constants::ALLOC_ALIGN_BYTES;
+        let byte_index = slot / 8;
+        let bit_index = slot % 8;
+
+        unsafe {
+            let byte = self.object_map.add(byte_index);
+            *byte |= 1 << bit_index;
+        }
+    }
+
+    /// Check if an object is marked at the given byte offset within the block.
+    pub fn is_object_marked(&self, offset: usize) -> bool {
+        debug_assert!(offset < constants::BLOCK_CAPACITY);
+
+        let slot = offset / constants::ALLOC_ALIGN_BYTES;
+        let byte_index = slot / 8;
+        let bit_index = slot % 8;
+
+        unsafe {
+            let byte = *self.object_map.add(byte_index);
+            (byte & (1 << bit_index)) != 0
+        }
+    }
+
+    /// Clear the object mark at the given byte offset within the block.
+    pub fn clear_object(&mut self, offset: usize) {
+        debug_assert!(offset < constants::BLOCK_CAPACITY);
+
+        let slot = offset / constants::ALLOC_ALIGN_BYTES;
+        let byte_index = slot / 8;
+        let bit_index = slot % 8;
+
+        unsafe {
+            let byte = self.object_map.add(byte_index);
+            *byte &= !(1 << bit_index);
+        }
+    }
+
+    /// Find the next marked object starting from the given offset (inclusive).
+    /// Returns the offset of the next marked object, or None if no more objects are marked.
+    pub fn find_next_object(&self, starting_offset: usize) -> Option<usize> {
+        let start_slot = starting_offset / constants::ALLOC_ALIGN_BYTES;
+
+        for slot in start_slot..constants::OBJECT_MAP_SLOTS {
+            let byte_index = slot / 8;
+            let bit_index = slot % 8;
+
+            unsafe {
+                let byte = *self.object_map.add(byte_index);
+                if (byte & (1 << bit_index)) != 0 {
+                    return Some(slot * constants::ALLOC_ALIGN_BYTES);
+                }
+            }
+        }
+
+        None
     }
 
     // Return an iterator over all the line mark flags
@@ -207,5 +277,134 @@ mod tests {
         println!("test_find_entire_block got {got:?} expected {expect:?}");
 
         assert!(got == expect);
+    }
+
+    #[test]
+    fn test_object_map_mark_and_check() {
+        // Test marking and checking individual object slots
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = BlockMeta::new(block.as_ptr());
+
+        // Initially, no objects should be marked
+        assert!(!meta.is_object_marked(0));
+        assert!(!meta.is_object_marked(constants::ALLOC_ALIGN_BYTES));
+        assert!(!meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * 2));
+
+        // Mark some objects
+        meta.mark_object(0);
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES * 100);
+
+        // Check marked objects
+        assert!(meta.is_object_marked(0));
+        assert!(meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * 5));
+        assert!(meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * 100));
+
+        // Check unmarked objects
+        assert!(!meta.is_object_marked(constants::ALLOC_ALIGN_BYTES));
+        assert!(!meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * 2));
+        assert!(!meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * 99));
+    }
+
+    #[test]
+    fn test_object_map_clear() {
+        // Test clearing marked objects
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = BlockMeta::new(block.as_ptr());
+
+        let offset = constants::ALLOC_ALIGN_BYTES * 10;
+
+        // Mark an object
+        meta.mark_object(offset);
+        assert!(meta.is_object_marked(offset));
+
+        // Clear it
+        meta.clear_object(offset);
+        assert!(!meta.is_object_marked(offset));
+    }
+
+    #[test]
+    fn test_object_map_find_next() {
+        // Test finding marked objects
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = BlockMeta::new(block.as_ptr());
+
+        // Mark objects at various positions
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES * 10);
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES * 50);
+
+        // Find from the beginning
+        let first = meta.find_next_object(0);
+        assert_eq!(first, Some(constants::ALLOC_ALIGN_BYTES * 5));
+
+        // Find from after the first
+        let second = meta.find_next_object(constants::ALLOC_ALIGN_BYTES * 6);
+        assert_eq!(second, Some(constants::ALLOC_ALIGN_BYTES * 10));
+
+        // Find from after the second
+        let third = meta.find_next_object(constants::ALLOC_ALIGN_BYTES * 11);
+        assert_eq!(third, Some(constants::ALLOC_ALIGN_BYTES * 50));
+
+        // Find from after all marked objects
+        let none = meta.find_next_object(constants::ALLOC_ALIGN_BYTES * 51);
+        assert_eq!(none, None);
+    }
+
+    #[test]
+    fn test_object_map_reset() {
+        // Test that reset clears the object map
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = BlockMeta::new(block.as_ptr());
+
+        // Mark several objects
+        for i in 0..10 {
+            meta.mark_object(constants::ALLOC_ALIGN_BYTES * i);
+        }
+
+        // Verify they're marked
+        for i in 0..10 {
+            assert!(meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * i));
+        }
+
+        // Reset
+        meta.reset();
+
+        // Verify they're all cleared
+        for i in 0..10 {
+            assert!(!meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * i));
+        }
+
+        // Verify find_next_object returns None
+        assert_eq!(meta.find_next_object(0), None);
+    }
+
+    #[test]
+    fn test_object_map_dense_marking() {
+        // Test marking many consecutive objects
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = BlockMeta::new(block.as_ptr());
+
+        let num_objects = 100;
+
+        // Mark consecutive objects
+        for i in 0..num_objects {
+            meta.mark_object(constants::ALLOC_ALIGN_BYTES * i);
+        }
+
+        // Verify all are marked
+        for i in 0..num_objects {
+            assert!(meta.is_object_marked(constants::ALLOC_ALIGN_BYTES * i));
+        }
+
+        // Verify we can find them all
+        let mut current_offset = 0;
+        let mut found_count = 0;
+        while let Some(offset) = meta.find_next_object(current_offset) {
+            assert_eq!(offset, constants::ALLOC_ALIGN_BYTES * found_count);
+            found_count += 1;
+            current_offset = offset + constants::ALLOC_ALIGN_BYTES;
+        }
+        assert_eq!(found_count, num_objects);
     }
 }
