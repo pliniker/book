@@ -6,7 +6,7 @@ use crate::safeptr::TaggedScopedPtr;
 use crate::vm::{EvalStatus, Thread};
 
 use rustyline::error::ReadlineError;
-use rustyline::Editor;
+use rustyline::DefaultEditor;
 
 fn get_or_create_history(filename: &str) -> Option<String> {
     match dirs::home_dir() {
@@ -18,10 +18,9 @@ fn get_or_create_history(filename: &str) -> Option<String> {
     }
 }
 
-fn get_reader(history_file: &Option<String>) -> Editor<()> {
-    // () means no completion support (TODO)
-    // TODO - find a more suitable alternative to rustyline
-    let mut reader = Editor::<()>::new();
+fn get_reader(history_file: &Option<String>) -> Result<DefaultEditor, ReadlineError> {
+    // DefaultEditor provides basic editing without custom completion
+    let mut reader = DefaultEditor::new()?;
 
     // Try to load the repl history file
     if let Some(ref path) = history_file {
@@ -30,7 +29,7 @@ fn get_reader(history_file: &Option<String>) -> Editor<()> {
         }
     }
 
-    reader
+    Ok(reader)
 }
 
 fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<(), RuntimeError> {
@@ -88,7 +87,7 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
 
 pub fn repl(mem: &MutatorView) -> Result<(), RuntimeError> {
     let history_file = get_or_create_history(".evalrus.history");
-    let mut reader = get_reader(&history_file);
+    let mut reader = get_reader(&history_file)?;
 
     let main_thread = Thread::alloc(mem)?;
 
@@ -99,7 +98,7 @@ pub fn repl(mem: &MutatorView) -> Result<(), RuntimeError> {
         match readline {
             // valid input
             Ok(line) => {
-                reader.add_history_entry(&line);
+                reader.add_history_entry(&line)?;
                 interpret_line(mem, &main_thread, line)?;
             }
 
