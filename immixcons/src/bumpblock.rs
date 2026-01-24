@@ -91,6 +91,11 @@ impl BumpBlock {
     pub fn current_hole_size(&self) -> usize {
         self.cursor as usize - self.limit as usize
     }
+
+    /// Return the address of the block itself
+    pub fn block_addr(&self) -> usize {
+        self.block.as_ptr() as usize
+    }
 }
 
 #[cfg(test)]

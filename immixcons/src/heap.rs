@@ -1,4 +1,5 @@
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::{replace, size_of};
 use std::ptr::{write, NonNull};
@@ -22,7 +23,7 @@ use crate::stack::SystemStackInfo;
 struct BlockList {
     head: Option<BumpBlock>,
     overflow: Option<BumpBlock>,
-    rest: Vec<BumpBlock>,
+    rest: HashMap<usize, BumpBlock>,
 }
 // ANCHOR_END: DefBlockList
 
@@ -31,7 +32,7 @@ impl BlockList {
         BlockList {
             head: None,
             overflow: None,
-            rest: Vec::new(),
+            rest: HashMap::new(),
         }
     }
 
@@ -52,8 +53,9 @@ impl BlockList {
                     // the block does not have a suitable hole
                     None => {
                         let previous = replace(overflow, BumpBlock::new()?);
+                        let previous_addr = previous.block_addr();
 
-                        self.rest.push(previous);
+                        self.rest.insert(previous_addr, previous);
 
                         overflow.inner_alloc(alloc_size).expect("Unexpected error!")
                     }
@@ -84,16 +86,16 @@ impl BlockList {
 /// A type that implements `AllocRaw` to provide a low-level heap interface.
 /// Does not allocate internally on initialization.
 // ANCHOR: DefStickyImmixHeap
-pub struct StickyImmixHeap<H> {
+pub struct ImmixConsHeap<H> {
     blocks: UnsafeCell<BlockList>,
     stack: SystemStackInfo,
     _header_type: PhantomData<*const H>,
 }
 // ANCHOR_END: DefStickyImmixHeap
 
-impl<H> StickyImmixHeap<H> {
-    pub fn new() -> StickyImmixHeap<H> {
-        StickyImmixHeap {
+impl<H> ImmixConsHeap<H> {
+    pub fn new() -> ImmixConsHeap<H> {
+        ImmixConsHeap {
             blocks: UnsafeCell::new(BlockList::new()),
             stack: SystemStackInfo::new(),
             _header_type: PhantomData,
@@ -132,8 +134,9 @@ impl<H> StickyImmixHeap<H> {
                     // the block does not have a suitable hole
                     None => {
                         let previous = replace(head, BumpBlock::new()?);
+                        let previous_addr = previous.block_addr();
 
-                        blocks.rest.push(previous);
+                        blocks.rest.insert(previous_addr, previous);
 
                         head.inner_alloc(alloc_size).expect("Unexpected error!")
                     }
@@ -160,7 +163,7 @@ impl<H> StickyImmixHeap<H> {
     }
 }
 
-impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
+impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     type Header = H;
 
     /// Allocate space for object `T`, creating an header for it and writing the object
@@ -257,9 +260,9 @@ impl<H: AllocHeader> AllocRaw for StickyImmixHeap<H> {
     // ANCHOR_END: DefGetObject
 }
 
-impl<H> Default for StickyImmixHeap<H> {
-    fn default() -> StickyImmixHeap<H> {
-        StickyImmixHeap::new()
+impl<H> Default for ImmixConsHeap<H> {
+    fn default() -> ImmixConsHeap<H> {
+        ImmixConsHeap::new()
     }
 }
 
@@ -353,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_memory() {
-        let mem = StickyImmixHeap::<TestHeader>::new();
+        let mem = ImmixConsHeap::<TestHeader>::new();
 
         match mem.alloc(String::from("foo")) {
             Ok(s) => {
@@ -367,13 +370,13 @@ mod tests {
 
     #[test]
     fn test_too_big() {
-        let mem = StickyImmixHeap::<TestHeader>::new();
+        let mem = ImmixConsHeap::<TestHeader>::new();
         assert!(mem.alloc(Big::make()) == Err(AllocError::BadRequest));
     }
 
     #[test]
     fn test_many_obs() {
-        let mem = StickyImmixHeap::<TestHeader>::new();
+        let mem = ImmixConsHeap::<TestHeader>::new();
 
         let mut obs = Vec::new();
 
@@ -395,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_array() {
-        let mem = StickyImmixHeap::<TestHeader>::new();
+        let mem = ImmixConsHeap::<TestHeader>::new();
 
         let size = 2048;
 
@@ -417,12 +420,12 @@ mod tests {
 
     #[test]
     fn test_header() {
-        let mem = StickyImmixHeap::<TestHeader>::new();
+        let mem = ImmixConsHeap::<TestHeader>::new();
 
         match mem.alloc(String::from("foo")) {
             Ok(s) => {
                 let untyped_ptr = s.as_untyped();
-                let header_ptr = StickyImmixHeap::<TestHeader>::get_header(untyped_ptr);
+                let header_ptr = ImmixConsHeap::<TestHeader>::get_header(untyped_ptr);
                 dbg!(header_ptr);
                 let header = unsafe { &*header_ptr.as_ptr() as &TestHeader };
 

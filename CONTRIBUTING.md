@@ -10,6 +10,14 @@ correctness to entire chapter content! Feel free to add yourself to the
 `contributors.txt` list.
 
 
+## LLMs
+
+Whether you use LLMs or not, you are responsible for the correctness and 
+quality of any code or documentation submission, of explaining your idea
+and why you think it's a good idea. Put in the work to understand the 
+problem and solution.
+
+
 ## Licensing
 
 ### Book text

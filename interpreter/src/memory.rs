@@ -2,7 +2,7 @@
 ///
 /// Defines Stack, Heap and Memory types, and a MemoryView type that gives a mutator a safe
 /// view into the stack and heap.
-use immixcons::{AllocObject, AllocRaw, ArraySize, RawPtr, StickyImmixHeap};
+use immixcons::{AllocObject, AllocRaw, ArraySize, ImmixConsHeap, RawPtr};
 
 use crate::error::RuntimeError;
 use crate::headers::{ObjectHeader, TypeList};
@@ -72,7 +72,7 @@ impl MutatorScope for MutatorView<'_> {}
 
 /// The heap implementation
 // ANCHOR: DefHeapStorage
-pub type HeapStorage = StickyImmixHeap<ObjectHeader>;
+pub type HeapStorage = ImmixConsHeap<ObjectHeader>;
 // ANCHOR_END: DefHeapStorage
 
 /// Heap memory types.

@@ -2,13 +2,18 @@
 
 ## Goals
 
-An educational tool for building and understanding programming language design
-and implementation supporting the following features:
+An educational tool for building and understanding programming language
+implementaion supporting the following features:
 
 - Conservative Immix garbage collection
 - Bytecode compiler and virtual machine interpreter
 - Dynamic duck-typed semantics
 - Less emphasis on syntax, therefore an s-expression syntax
+
+Given the educational emphasis, simplicity should be maintained.
+- No heavy optimizations
+- Readability of code is paramount
+- Maintainability of code is paramount
 
 ## Layout
 
@@ -46,3 +51,7 @@ cargo test
 ## Code style
 
 Standard rustfmt rules apply universally.
+
+## Planning
+
+Plans and notes should be kept under the `scratchpad/` directory.

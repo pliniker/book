@@ -14,6 +14,6 @@ pub use crate::allocator::{
 
 pub use crate::stack::SystemStackInfo;
 
-pub use crate::heap::StickyImmixHeap;
+pub use crate::heap::ImmixConsHeap;
 
 pub use crate::rawptr::RawPtr;
