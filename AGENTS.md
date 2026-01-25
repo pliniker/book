@@ -55,3 +55,4 @@ Standard rustfmt rules apply universally.
 ## Planning
 
 Plans and notes should be kept under the `scratchpad/` directory.
+Refer to `scratchpad/notes.md` for high level plans.

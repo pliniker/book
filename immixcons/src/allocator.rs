@@ -15,6 +15,10 @@ pub enum AllocError {
 }
 // ANCHOR_END: DefAllocError
 
+/// A garbage collection error type
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GcError {}
+
 /// A type that describes allocation of an object into a heap space, returning
 /// a bare pointer type on success
 // ANCHOR: DefAllocRaw
@@ -39,6 +43,9 @@ pub trait AllocRaw {
 
     /// Given a bare pointer to an object's header, return the expected object address
     fn get_object(header: NonNull<Self::Header>) -> NonNull<()>;
+
+    /// Run a garbage collection iteration
+    fn gc(&self) -> Result<(), GcError>;
 }
 // ANCHOR_END: DefAllocRaw
 

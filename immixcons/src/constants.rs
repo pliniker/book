@@ -48,6 +48,10 @@ pub const OBJECT_MAP_START: usize = LINE_MARK_START + LINE_COUNT;
 // Actual number of object map slots based on final capacity
 pub const OBJECT_MAP_SLOTS: usize = BLOCK_CAPACITY / ALLOC_ALIGN_BYTES;
 
+// Allocation extents
+pub const ALLOC_UPPER_EXTENT: usize = OBJECT_MAP_START;
+pub const ALLOC_LOWER_EXTENT: usize = 0;
+
 // Object size ranges
 pub const MAX_ALLOC_SIZE: usize = u32::MAX as usize;
 pub const SMALL_OBJECT_MIN: usize = 1;

@@ -6,7 +6,7 @@ use std::ptr::{write, NonNull};
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
-    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, SizeClass,
+    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, Mark, SizeClass,
 };
 use crate::bumpblock::BumpBlock;
 use crate::constants;
@@ -81,6 +81,20 @@ impl BlockList {
         Ok(space)
     }
     // ANCHOR_END: DefOverflowAlloc
+
+    /// Using best effort logic, estimate if a pointer is a valid heap
+    /// pointer.
+    fn is_conservatively_a_ptr(&self, ptr: usize) -> bool {
+        // In theory we could check low bits for pointer alignment,
+        // in reality low bits may contain tag information
+        //let low_bits = ptr & constants::ALLOC_ALIGN_MASK;
+        //low_bits < 0xf etc
+
+        let block_base = ptr & constants::BLOCK_PTR_MASK;
+        let block_offset = ptr & !constants::BLOCK_PTR_MASK;
+
+        block_offset < constants::ALLOC_UPPER_EXTENT && self.rest.contains_key(&block_base)
+    }
 }
 
 /// A type that implements `AllocRaw` to provide a low-level heap interface.
@@ -258,6 +272,22 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         unsafe { NonNull::new_unchecked(header.as_ptr().offset(1).cast::<()>()) }
     }
     // ANCHOR_END: DefGetObject
+
+    fn gc(&self) -> Result<(), GcError> {
+        // TODO
+        // 1. ~scan stack~
+        // 2. ~filter for managed heap pointers~
+        // 3. trace
+        // 4. collect
+        // 5. <unclear> manage blocks
+        let blocks = unsafe { &mut *self.blocks.get() };
+
+        let mut stack_scan = Vec::new();
+        self.stack
+            .scan(&mut stack_scan, |ptr| blocks.is_conservatively_a_ptr(ptr));
+
+        Ok(())
+    }
 }
 
 impl<H> Default for ImmixConsHeap<H> {

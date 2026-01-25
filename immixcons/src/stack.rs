@@ -1,26 +1,12 @@
 use libc::{getcontext, pthread_attr_getstack};
+use log::trace;
 use std::cell::RefCell;
 use std::hint::black_box;
 use std::mem::{size_of, MaybeUninit};
 use std::slice::from_raw_parts;
 
-struct StackItem {
-    value: usize,
-}
-
-impl StackItem {
-    fn new(value: usize) -> Self {
-        StackItem { value }
-    }
-}
-
-struct StackScannerInner {
-    scan: Vec<StackItem>,
-}
-
 pub struct SystemStackInfo {
     base: usize,
-    inner: RefCell<StackScannerInner>,
 }
 
 impl SystemStackInfo {
@@ -38,29 +24,35 @@ impl SystemStackInfo {
         };
 
         if result != 0 {
-            panic!("could not get thread attributes!");
+            panic!("pthread_attr_getstack() returned {}", result);
         }
 
         SystemStackInfo {
-            base: unsafe { stack_size.assume_init() },
-            inner: RefCell::new(StackScannerInner { scan: Vec::new() }),
+            base: unsafe { stack_base.assume_init() as usize },
         }
     }
 
-    fn scan(&self) {
+    pub fn scan<F>(&self, results: &mut Vec<usize>, filter: F)
+    where
+        F: Fn(usize) -> bool,
+    {
+        // call getcontext to put all register values on to the stack
         let mut context = MaybeUninit::zeroed();
         let result = unsafe { getcontext(context.as_mut_ptr()) };
         if result != 0 {
             panic!("could not get thread context!");
         }
 
+        // there's nothing guaranteeing the ordering of these function
+        // local vars on the stack, compiler is free to break all this horribly
         let stack_top_marker: usize = 0xbeefd00d;
 
         let mut stack_top = (&stack_top_marker as *const usize).addr();
-        let mut stack_base = (&self.base as *const usize).addr();
+        let mut stack_base = self.base;
 
         let word_size = size_of::<usize>();
 
+        // swap top and base when
         if stack_top < stack_base {
             (stack_top, stack_base) = (stack_base + word_size, stack_top);
         }
@@ -68,16 +60,16 @@ impl SystemStackInfo {
         let stack_len = (stack_top - stack_base) / word_size;
         let slice = unsafe { from_raw_parts(stack_base as *const usize, stack_len) };
 
-        let stack_scan = &mut self.inner.borrow_mut().scan;
-
         for stack_item in slice {
-            // if *stack_item != 0 {
-            //     println!("[stack] {:x}", *stack_item);
-            // }
-            stack_scan.push(StackItem::new(*stack_item));
+            trace!("[stack_scan] {:x}", *stack_item);
+
+            if filter(*stack_item) {
+                results.push(*stack_item);
+            }
         }
 
         black_box(&context);
+        black_box(&stack_top_marker);
     }
 }
 
