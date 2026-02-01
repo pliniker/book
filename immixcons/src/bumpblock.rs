@@ -1,31 +1,16 @@
 use std::ptr::write;
 
-use blockalloc::{Block, BlockError};
-
 use crate::allocator::AllocError;
 use crate::blockmeta::BlockMeta;
 use crate::constants;
 
-impl From<BlockError> for AllocError {
-    fn from(error: BlockError) -> AllocError {
-        match error {
-            BlockError::BadRequest => AllocError::BadRequest,
-            BlockError::OOM => AllocError::OOM,
-        }
-    }
-}
-
 /// A block of heap. This maintains the bump cursor and limit per block
-/// and the mark flags in a separate `meta` struct.  A pointer to the
-/// `meta` struct is placed in the very first word of the block memory
-/// to provide fast access when in the object marking phase.
-/// Thus allocation in the first line of the block doesn't begin at
-/// offset 0 but after this `meta` pointer.
+/// and the mark flags in a separate `meta` struct.
 // ANCHOR: DefBumpBlock
 pub struct BumpBlock {
     cursor: *const u8,
     limit: *const u8,
-    block: Block,
+    block: *const u8,
     meta: BlockMeta,
 }
 // ANCHOR_END: DefBumpBlock
@@ -33,24 +18,19 @@ pub struct BumpBlock {
 impl BumpBlock {
     /// Create a new block of heap space and it's metadata, placing a
     /// pointer to the metadata in the first word of the block.
-    pub fn new() -> Result<BumpBlock, AllocError> {
-        let inner_block = Block::new(constants::BLOCK_SIZE)?;
-        let block_ptr = inner_block.as_ptr();
-
-        let block = BumpBlock {
-            cursor: unsafe { block_ptr.add(constants::BLOCK_CAPACITY) },
-            limit: block_ptr,
-            block: inner_block,
-            meta: BlockMeta::new(block_ptr),
-        };
-
-        Ok(block)
+    pub fn new(block: *const u8) -> BumpBlock {
+        BumpBlock {
+            cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
+            limit: block,
+            block: block,
+            meta: BlockMeta::new(block),
+        }
     }
 
     /// Write an object into the block at the given offset. The offset is not
     /// checked for overflow, hence this function is unsafe.
     unsafe fn write<T>(&mut self, object: T, offset: usize) -> *const T {
-        let p = self.block.as_ptr().add(offset) as *mut T;
+        let p = self.block.add(offset) as *mut T;
         write(p, object);
         p
     }
@@ -65,16 +45,15 @@ impl BumpBlock {
         let next_ptr = ptr.checked_sub(alloc_size)? & constants::ALLOC_ALIGN_MASK;
 
         if next_ptr < limit {
-            let block_relative_limit =
-                unsafe { self.limit.sub(self.block.as_ptr() as usize) } as usize;
+            let block_relative_limit = unsafe { self.limit.sub(self.block as usize) } as usize;
 
             if block_relative_limit > 0 {
                 if let Some((cursor, limit)) = self
                     .meta
                     .find_next_available_hole(block_relative_limit, alloc_size)
                 {
-                    self.cursor = unsafe { self.block.as_ptr().add(cursor) };
-                    self.limit = unsafe { self.block.as_ptr().add(limit) };
+                    self.cursor = unsafe { self.block.add(cursor) };
+                    self.limit = unsafe { self.block.add(limit) };
                     return self.inner_alloc(alloc_size);
                 }
             }
@@ -91,17 +70,14 @@ impl BumpBlock {
     pub fn current_hole_size(&self) -> usize {
         self.cursor as usize - self.limit as usize
     }
-
-    /// Return the address of the block itself
-    pub fn block_addr(&self) -> usize {
-        self.block.as_ptr() as usize
-    }
 }
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    use blockalloc::Block;
 
     const TEST_UNIT_SIZE: usize = constants::ALLOC_ALIGN_BYTES;
 
@@ -135,7 +111,8 @@ mod tests {
 
     #[test]
     fn test_empty_block() {
-        let mut b = BumpBlock::new().unwrap();
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut b = BumpBlock::new(block.as_ptr());
 
         let count = loop_check_allocate(&mut b);
         let expect = constants::BLOCK_CAPACITY / TEST_UNIT_SIZE;
@@ -146,8 +123,9 @@ mod tests {
 
     #[test]
     fn test_half_block() {
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
         // This block has an available hole as the second half of the block
-        let mut b = BumpBlock::new().unwrap();
+        let mut b = BumpBlock::new(block.as_ptr());
 
         for i in 0..(constants::LINE_COUNT / 2) {
             b.meta.mark_line(i);
@@ -169,7 +147,8 @@ mod tests {
         // This block has every other line marked, so the alternate lines are conservatively
         // marked. Nothing should be allocated in this block.
 
-        let mut b = BumpBlock::new().unwrap();
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut b = BumpBlock::new(block.as_ptr());
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {

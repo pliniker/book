@@ -12,6 +12,16 @@ use crate::bumpblock::BumpBlock;
 use crate::constants;
 use crate::rawptr::RawPtr;
 use crate::stack::SystemStackInfo;
+use blockalloc::{Block, BlockError};
+
+impl From<BlockError> for AllocError {
+    fn from(error: BlockError) -> AllocError {
+        match error {
+            BlockError::BadRequest => AllocError::BadRequest,
+            BlockError::OOM => AllocError::OOM,
+        }
+    }
+}
 
 /// A list of blocks as the current block being allocated into and a list
 /// of full blocks
@@ -23,7 +33,7 @@ use crate::stack::SystemStackInfo;
 struct BlockList {
     head: Option<BumpBlock>,
     overflow: Option<BumpBlock>,
-    rest: HashMap<usize, BumpBlock>,
+    rest: HashMap<usize, Block>,
 }
 // ANCHOR_END: DefBlockList
 
@@ -52,10 +62,10 @@ impl BlockList {
 
                     // the block does not have a suitable hole
                     None => {
-                        let previous = replace(overflow, BumpBlock::new()?);
-                        let previous_addr = previous.block_addr();
+                        let block = Block::new(constants::BLOCK_SIZE)?;
+                        *overflow = BumpBlock::new(block.as_ptr());
 
-                        self.rest.insert(previous_addr, previous);
+                        self.rest.insert(block.addr(), block);
 
                         overflow.inner_alloc(alloc_size).expect("Unexpected error!")
                     }
@@ -64,7 +74,8 @@ impl BlockList {
 
             // We have no blocks to work with yet so make one
             None => {
-                let mut overflow = BumpBlock::new()?;
+                let block = Block::new(constants::BLOCK_SIZE)?;
+                let mut overflow = BumpBlock::new(block.as_ptr());
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation
@@ -92,6 +103,8 @@ impl BlockList {
 
         let block_base = ptr & constants::BLOCK_PTR_MASK;
         let block_offset = ptr & !constants::BLOCK_PTR_MASK;
+
+        // TODO also check object map
 
         block_offset < constants::ALLOC_UPPER_EXTENT && self.rest.contains_key(&block_base)
     }
@@ -145,12 +158,12 @@ impl<H> ImmixConsHeap<H> {
                     // the block has a suitable hole
                     Some(space) => space,
 
-                    // the block does not have a suitable hole
+                    // the block does not have a suitable hole so allocate a new head block
                     None => {
-                        let previous = replace(head, BumpBlock::new()?);
-                        let previous_addr = previous.block_addr();
+                        let block = Block::new(constants::BLOCK_SIZE)?;
+                        *head = BumpBlock::new(block.as_ptr());
 
-                        blocks.rest.insert(previous_addr, previous);
+                        blocks.rest.insert(block.addr(), block);
 
                         head.inner_alloc(alloc_size).expect("Unexpected error!")
                     }
@@ -159,7 +172,10 @@ impl<H> ImmixConsHeap<H> {
 
             // We have no blocks to work with yet so make one
             None => {
-                let mut head = BumpBlock::new()?;
+                let block = Block::new(constants::BLOCK_SIZE)?;
+                let mut head = BumpBlock::new(block.as_ptr());
+
+                blocks.rest.insert(block.addr(), block);
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation

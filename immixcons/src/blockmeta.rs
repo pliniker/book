@@ -58,7 +58,7 @@ impl BlockMeta {
     /// Mark an object allocation at the given byte offset within the block.
     /// The offset should be aligned to ALLOC_ALIGN_BYTES.
     pub fn mark_object(&mut self, offset: usize) {
-        debug_assert!(offset < constants::BLOCK_CAPACITY);
+        debug_assert!(offset < constants::ALLOC_UPPER_EXTENT);
         debug_assert!(offset & !constants::ALLOC_ALIGN_MASK == 0);
 
         let slot = offset / constants::ALLOC_ALIGN_BYTES;
@@ -73,7 +73,7 @@ impl BlockMeta {
 
     /// Check if an object is marked at the given byte offset within the block.
     pub fn is_object_marked(&self, offset: usize) -> bool {
-        debug_assert!(offset < constants::BLOCK_CAPACITY);
+        debug_assert!(offset < constants::ALLOC_UPPER_EXTENT);
 
         let slot = offset / constants::ALLOC_ALIGN_BYTES;
         let byte_index = slot / 8;

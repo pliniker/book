@@ -81,6 +81,11 @@ impl Block {
         self.ptr.as_ptr()
     }
     // ANCHOR_END: BlockAsPtr
+
+    /// Return the bare pointer to the base of the block as the usized address
+    pub fn addr(&self) -> usize {
+        self.ptr.addr().get()
+    }
 }
 
 impl Drop for Block {
