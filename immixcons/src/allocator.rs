@@ -1,7 +1,7 @@
-use std::ptr::NonNull;
-
 use crate::constants;
 use crate::rawptr::RawPtr;
+use std::mem::size_of;
+use std::ptr::NonNull;
 
 /// An allocation error type
 // ANCHOR: DefAllocError
@@ -126,5 +126,10 @@ pub trait AllocHeader: Sized {
 
     /// Get the type of the object
     fn type_id(&self) -> Self::TypeId;
+
+    /// Get the header size, to the next allocator-aligned number of bytes
+    fn header_size() -> usize {
+        (size_of::<Self>() + constants::ALLOC_ALIGN_BYTES - 1) & !(constants::ALLOC_ALIGN_BYTES - 1)
+    }
 }
 // ANCHOR_END: DefAllocHeader

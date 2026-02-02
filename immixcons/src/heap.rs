@@ -1,7 +1,7 @@
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::mem::{replace, size_of};
+use std::mem::size_of;
 use std::ptr::{write, NonNull};
 use std::slice::from_raw_parts_mut;
 
@@ -23,12 +23,26 @@ impl From<BlockError> for AllocError {
     }
 }
 
+/// Return value of finding a space to allocate into
+#[derive(Copy, Clone)]
+struct AllocDest {
+    block: *const u8,
+    space: *const u8,
+}
+
+impl AllocDest {
+    fn new(block: *const u8, space: *const u8) -> AllocDest {
+        AllocDest { block, space }
+    }
+}
+
 /// A list of blocks as the current block being allocated into and a list
 /// of full blocks
 // TODO:
-// free: Vec<BumpBlock>,
-// recycle: Vec<BumpBlock>
-// large: Vec<Thing>
+// free: Vec<usize>,
+// recycle: Vec<usize>
+// large: Vec<Thing> - large objects will likely be implemented by an
+//   indirection via a small object pointer
 // ANCHOR: DefBlockList
 struct BlockList {
     head: Option<BumpBlock>,
@@ -49,25 +63,26 @@ impl BlockList {
     /// Allocate a space for a medium object into an overflow block
     // TODO this just allocates a new block on demand, but should look at the free block list first
     // ANCHOR: DefOverflowAlloc
-    fn overflow_alloc(&mut self, alloc_size: usize) -> Result<*const u8, AllocError> {
+    fn overflow_alloc(&mut self, alloc_size: usize) -> Result<AllocDest, AllocError> {
         assert!(alloc_size <= constants::BLOCK_CAPACITY);
 
-        let space = match self.overflow {
+        let dest = match self.overflow {
             // We already have an overflow block to try to use...
             Some(ref mut overflow) => {
                 // This is a medium object that might fit in the current block...
                 match overflow.inner_alloc(alloc_size) {
                     // the block has a suitable hole
-                    Some(space) => space,
+                    Some(space) => AllocDest::new(overflow.block_ptr(), space),
 
                     // the block does not have a suitable hole
                     None => {
                         let block = Block::new(constants::BLOCK_SIZE)?;
-                        *overflow = BumpBlock::new(block.as_ptr());
+                        *overflow = unsafe { BumpBlock::new(block.as_ptr()) };
 
                         self.rest.insert(block.addr(), block);
 
-                        overflow.inner_alloc(alloc_size).expect("Unexpected error!")
+                        let space = overflow.inner_alloc(alloc_size).expect("Unexpected error!");
+                        AllocDest::new(overflow.block_ptr(), space)
                     }
                 }
             }
@@ -75,7 +90,7 @@ impl BlockList {
             // We have no blocks to work with yet so make one
             None => {
                 let block = Block::new(constants::BLOCK_SIZE)?;
-                let mut overflow = BumpBlock::new(block.as_ptr());
+                let mut overflow = unsafe { BumpBlock::new(block.as_ptr()) };
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation
@@ -85,11 +100,11 @@ impl BlockList {
 
                 self.overflow = Some(overflow);
 
-                space
+                AllocDest::new(block.as_ptr(), space)
             }
         };
 
-        Ok(space)
+        Ok(dest)
     }
     // ANCHOR_END: DefOverflowAlloc
 
@@ -136,7 +151,7 @@ impl<H> ImmixConsHeap<H> {
         &self,
         alloc_size: usize,
         size_class: SizeClass,
-    ) -> Result<*const u8, AllocError> {
+    ) -> Result<AllocDest, AllocError> {
         let blocks = unsafe { &mut *self.blocks.get() };
 
         // TODO handle large objects
@@ -145,7 +160,7 @@ impl<H> ImmixConsHeap<H> {
             return Err(AllocError::BadRequest);
         }
 
-        let space = match blocks.head {
+        let dest = match blocks.head {
             // We already have a block to try to use...
             Some(ref mut head) => {
                 // If this is a medium object that doesn't fit in the hole, use overflow
@@ -156,16 +171,17 @@ impl<H> ImmixConsHeap<H> {
                 // This is a small object that might fit in the current block...
                 match head.inner_alloc(alloc_size) {
                     // the block has a suitable hole
-                    Some(space) => space,
+                    Some(space) => AllocDest::new(head.block_ptr(), space),
 
                     // the block does not have a suitable hole so allocate a new head block
                     None => {
                         let block = Block::new(constants::BLOCK_SIZE)?;
-                        *head = BumpBlock::new(block.as_ptr());
+                        *head = unsafe { BumpBlock::new(block.as_ptr()) };
 
                         blocks.rest.insert(block.addr(), block);
 
-                        head.inner_alloc(alloc_size).expect("Unexpected error!")
+                        let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
+                        AllocDest::new(head.block_ptr(), space)
                     }
                 }
             }
@@ -173,7 +189,8 @@ impl<H> ImmixConsHeap<H> {
             // We have no blocks to work with yet so make one
             None => {
                 let block = Block::new(constants::BLOCK_SIZE)?;
-                let mut head = BumpBlock::new(block.as_ptr());
+                let mut head = unsafe { BumpBlock::new(block.as_ptr()) };
+                let block_ptr = block.as_ptr();
 
                 blocks.rest.insert(block.addr(), block);
 
@@ -185,11 +202,11 @@ impl<H> ImmixConsHeap<H> {
 
                 blocks.head = Some(head);
 
-                space
+                AllocDest::new(block_ptr, space)
             }
         };
 
-        Ok(space)
+        Ok(dest)
     }
 }
 
@@ -204,7 +221,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         T: AllocObject<<Self::Header as AllocHeader>::TypeId>,
     {
         // calculate the total size of the object and it's header
-        let header_size = size_of::<Self::Header>();
+        let header_size = Self::Header::header_size();
         let object_size = size_of::<T>();
         let total_size = header_size + object_size;
 
@@ -215,20 +232,27 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the object
-        let space = self.find_space(total_size, size_class)?;
+        let dest = self.find_space(total_size, size_class)?;
 
         // instantiate an object header for type T, setting the mark bit to "allocated"
         let header = Self::Header::new::<T>(object_size as ArraySize, size_class, Mark::Allocated);
 
         // write the header into the front of the allocated space
         unsafe {
-            write(space as *mut Self::Header, header);
+            write(dest.space as *mut Self::Header, header);
         }
 
         // write the object into the allocated space after the header
-        let object_space = unsafe { space.add(header_size) };
+        let object_space = unsafe { dest.space.add(header_size) };
         unsafe {
             write(object_space as *mut T, object);
+        }
+
+        // Mark this object in the block's object map
+        let object_offset = object_space as usize - dest.block as usize;
+        unsafe {
+            let mut meta = crate::blockmeta::BlockMeta::attach(dest.block);
+            meta.mark_object(object_offset);
         }
 
         // return a pointer to the object in the allocated space
@@ -240,37 +264,40 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     /// and returning a pointer to the array space
     // ANCHOR: DefAllocArray
     fn alloc_array(&self, size_bytes: ArraySize) -> Result<RawPtr<u8>, AllocError> {
-        // calculate the total size of the array and it's header
-        let header_size = size_of::<Self::Header>();
+        // calculate the total size of the array and its header
+        let header_size = Self::Header::header_size();
         let total_size = header_size + size_bytes as usize;
 
         // round the size to the next word boundary to keep objects aligned and get the size class
         let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the array
-        let space = self.find_space(total_size, size_class)?;
+        let dest = self.find_space(total_size, size_class)?;
 
         // instantiate an object header for an array, setting the mark bit to "allocated"
         let header = Self::Header::new_array(size_bytes, size_class, Mark::Allocated);
 
         // write the header into the front of the allocated space
         unsafe {
-            write(space as *mut Self::Header, header);
+            write(dest.space as *mut Self::Header, header);
         }
 
-        // calculate where the array will begin after the header
-        let array_space = unsafe { space.add(header_size) };
+        // calculate where the array will begin after the padded header
+        let array_space = unsafe { dest.space.add(header_size) };
 
-        // Initialize object_space to zero here.
-        // If using the system allocator for any objects (SizeClass::Large, for example),
-        // the memory may already be zeroed.
+        // Initialize array to zero
         let array = unsafe { from_raw_parts_mut(array_space as *mut u8, size_bytes as usize) };
-        // The compiler should recognize this as optimizable
         for byte in array {
             *byte = 0;
         }
 
-        // return a pointer to the array in the allocated space
+        // Mark this object in the block's object map
+        let object_offset = array_space as usize - dest.block as usize;
+        unsafe {
+            let mut meta = crate::blockmeta::BlockMeta::attach(dest.block);
+            meta.mark_object(object_offset);
+        }
+
         Ok(RawPtr::new(array_space))
     }
     // ANCHOR_END: DefAllocArray
@@ -278,14 +305,22 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     /// Return the object header for a given object pointer
     // ANCHOR: DefGetHeader
     fn get_header(object: NonNull<()>) -> NonNull<Self::Header> {
-        unsafe { NonNull::new_unchecked(object.cast::<Self::Header>().as_ptr().offset(-1)) }
+        let padded_header = Self::Header::header_size();
+        unsafe {
+            let header_ptr = (object.as_ptr() as *const u8).sub(padded_header) as *mut Self::Header;
+            NonNull::new_unchecked(header_ptr)
+        }
     }
     // ANCHOR_END: DefGetHeader
 
     /// Return the object from it's header address
     // ANCHOR: DefGetObject
     fn get_object(header: NonNull<Self::Header>) -> NonNull<()> {
-        unsafe { NonNull::new_unchecked(header.as_ptr().offset(1).cast::<()>()) }
+        let padded_header = Self::Header::header_size();
+        unsafe {
+            let obj_ptr = (header.as_ptr() as *const u8).add(padded_header) as *mut ();
+            NonNull::new_unchecked(obj_ptr)
+        }
     }
     // ANCHOR_END: DefGetObject
 
@@ -461,6 +496,45 @@ mod tests {
                     assert!(*byte == 0);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_alignment() {
+        let mem = ImmixConsHeap::<TestHeader>::new();
+
+        match mem.alloc(String::from("foo")) {
+            Ok(s) => {
+                let untyped_ptr = s.as_untyped();
+                let header_ptr = ImmixConsHeap::<TestHeader>::get_header(untyped_ptr);
+                let header_addr = header_ptr.as_ptr() as usize;
+                let obj_addr = untyped_ptr.as_ptr() as usize;
+
+                assert!(header_addr & (constants::ALLOC_ALIGN_BYTES - 1) == 0);
+                assert!(obj_addr & (constants::ALLOC_ALIGN_BYTES - 1) == 0);
+
+                let obj_from_header = ImmixConsHeap::<TestHeader>::get_object(header_ptr);
+                assert!(obj_from_header.as_ptr() as usize == obj_addr);
+            }
+
+            Err(_) => panic!("Allocation failed"),
+        }
+    }
+
+    #[test]
+    fn test_object_map_marked_on_alloc() {
+        let mem = ImmixConsHeap::<TestHeader>::new();
+
+        match mem.alloc(42usize) {
+            Ok(ptr) => {
+                let untyped_ptr = ptr.as_untyped();
+                let block_base = (untyped_ptr.as_ptr() as usize) & constants::BLOCK_PTR_MASK;
+                let object_offset = untyped_ptr.as_ptr() as usize - block_base;
+                let meta = unsafe { crate::blockmeta::BlockMeta::attach(block_base as *const u8) };
+                assert!(meta.is_object_marked(object_offset));
+            }
+
+            Err(_) => panic!("Allocation failed"),
         }
     }
 

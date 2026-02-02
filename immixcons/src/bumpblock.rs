@@ -1,29 +1,29 @@
 use std::ptr::write;
 
-use crate::allocator::AllocError;
 use crate::blockmeta::BlockMeta;
 use crate::constants;
 
-/// A block of heap. This maintains the bump cursor and limit per block
-/// and the mark flags in a separate `meta` struct.
+/// Safe abstraction around allocating into a block: maintaining a write
+/// cursor and allocation extents; includes the lines and object map
+/// abstration. Internally this is all raw pointers.
+/// This object does not OWN a block, is merely a temporary scaffolding
+/// around a current block.
 // ANCHOR: DefBumpBlock
 pub struct BumpBlock {
     cursor: *const u8,
     limit: *const u8,
     block: *const u8,
-    meta: BlockMeta,
 }
 // ANCHOR_END: DefBumpBlock
 
 impl BumpBlock {
     /// Create a new block of heap space and it's metadata, placing a
     /// pointer to the metadata in the first word of the block.
-    pub fn new(block: *const u8) -> BumpBlock {
+    pub unsafe fn new(block: *const u8) -> BumpBlock {
         BumpBlock {
-            cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
+            cursor: block.add(constants::BLOCK_CAPACITY),
             limit: block,
             block: block,
-            meta: BlockMeta::new(block),
         }
     }
 
@@ -48,9 +48,9 @@ impl BumpBlock {
             let block_relative_limit = unsafe { self.limit.sub(self.block as usize) } as usize;
 
             if block_relative_limit > 0 {
-                if let Some((cursor, limit)) = self
-                    .meta
-                    .find_next_available_hole(block_relative_limit, alloc_size)
+                let meta = unsafe { BlockMeta::attach(self.block) };
+                if let Some((cursor, limit)) =
+                    meta.find_next_available_hole(block_relative_limit, alloc_size)
                 {
                     self.cursor = unsafe { self.block.add(cursor) };
                     self.limit = unsafe { self.block.add(limit) };
@@ -69,6 +69,11 @@ impl BumpBlock {
     /// Return the size of the hole we're positioned at
     pub fn current_hole_size(&self) -> usize {
         self.cursor as usize - self.limit as usize
+    }
+
+    /// Return the block pointer we're working with
+    pub fn block_ptr(&self) -> *const u8 {
+        self.block
     }
 }
 
@@ -112,7 +117,7 @@ mod tests {
     #[test]
     fn test_empty_block() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut b = BumpBlock::new(block.as_ptr());
+        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
 
         let count = loop_check_allocate(&mut b);
         let expect = constants::BLOCK_CAPACITY / TEST_UNIT_SIZE;
@@ -125,10 +130,11 @@ mod tests {
     fn test_half_block() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         // This block has an available hole as the second half of the block
-        let mut b = BumpBlock::new(block.as_ptr());
+        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach(block.as_ptr()) };
 
         for i in 0..(constants::LINE_COUNT / 2) {
-            b.meta.mark_line(i);
+            meta.mark_line(i);
         }
         let occupied_bytes = (constants::LINE_COUNT / 2) * constants::LINE_SIZE;
 
@@ -148,11 +154,12 @@ mod tests {
         // marked. Nothing should be allocated in this block.
 
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut b = BumpBlock::new(block.as_ptr());
+        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach(block.as_ptr()) };
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
-                b.meta.mark_line(i);
+                meta.mark_line(i);
             }
         }
 
