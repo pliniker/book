@@ -421,4 +421,146 @@ mod tests {
         }
         assert_eq!(found_count, num_objects);
     }
+
+    #[test]
+    fn test_attach_preserves_meta_and_reset_works() {
+        // Ensure that attaching to an existing block does not reset metadata and
+        // that mutations via an attached meta are visible to the original meta.
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta1 = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        meta1.mark_line(2);
+        meta1.mark_object(constants::ALLOC_ALIGN_BYTES * 7);
+
+        // Attach to the same block without resetting
+        let mut meta2 = unsafe { BlockMeta::attach(block.as_ptr()) };
+
+        // Attached meta should see the marked object
+        assert!(meta2.is_object_marked(constants::ALLOC_ALIGN_BYTES * 7));
+
+        // Mutating with attached meta should affect the original meta
+        meta2.mark_line(8);
+        unsafe {
+            assert_eq!(*meta1.as_line_mark(8), 1);
+        }
+
+        // Reset via attached meta clears both line and object map
+        meta2.reset();
+        assert_eq!(meta1.find_next_object(0), None);
+        assert_eq!(
+            meta1.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE),
+            Some((constants::BLOCK_CAPACITY, 0))
+        );
+    }
+
+    #[test]
+    fn test_mark_block_sets_last_line() {
+        // mark_block should set the last line byte in the line marks region
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        meta.mark_block();
+
+        let last_mark = unsafe {
+            *block
+                .as_ptr()
+                .add(constants::LINE_MARK_START + constants::LINE_COUNT - 1)
+        };
+        assert_eq!(last_mark, 1);
+    }
+
+    #[test]
+    fn test_reset_clears_line_marks() {
+        // Reset should clear marked lines as well as object map
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        meta.mark_line(0);
+        meta.mark_line(10);
+
+        // Now reset
+        meta.reset();
+
+        // Entire block should be available again
+        assert_eq!(
+            meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE),
+            Some((constants::BLOCK_CAPACITY, 0))
+        );
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn test_mark_object_unaligned_panics() {
+        // mark_object should assert on unaligned offsets (debug build)
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        // Unaligned offset should trigger debug_assert
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES - 1);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn test_clear_object_out_of_bounds_panics() {
+        // clear_object asserts if offset is outside block capacity
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        // offset equal to BLOCK_CAPACITY should be out-of-bounds
+        meta.clear_object(constants::BLOCK_CAPACITY);
+    }
+
+    #[test]
+    fn test_is_object_marked_unaligned() {
+        // is_object_marked should report the slot as marked even if the offset
+        // passed is not aligned (it divides by ALLOC_ALIGN_BYTES).
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        let base = constants::ALLOC_ALIGN_BYTES * 3;
+        meta.mark_object(base);
+
+        // Non-aligned check should still report the object as marked
+        assert!(meta.is_object_marked(base + 1));
+    }
+
+    #[test]
+    fn test_find_next_object_with_unaligned_start() {
+        // find_next_object should accept an unaligned starting offset
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
+
+        // Starting at an unaligned offset should still find the object at the correct slot
+        let got = meta.find_next_object(constants::ALLOC_ALIGN_BYTES * 5 + 1);
+        assert_eq!(got, Some(constants::ALLOC_ALIGN_BYTES * 5));
+    }
+
+    #[test]
+    fn test_find_next_hole_requires_more_than_lines_required() {
+        // This test constructs a situation where an initial marked line is
+        // encountered with count == lines_required (so the block should not be
+        // returned), and a subsequent larger run results in a proper hole.
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+
+        let starting_line = 10;
+        let starting_at = starting_line * constants::LINE_SIZE;
+        let lines_required = 2;
+        let alloc_size = lines_required * constants::LINE_SIZE;
+
+        // Mark line 7 and 3 so that the first encountered marked line (7) is
+        // reached when the preceding unmarked count exactly equals lines_required,
+        // and the second marked line (3) will yield the actual hole.
+        meta.mark_line(7);
+        meta.mark_line(3);
+
+        let expect = Some((7 * constants::LINE_SIZE, 5 * constants::LINE_SIZE));
+        let got = meta.find_next_available_hole(starting_at, alloc_size);
+
+        assert_eq!(got, expect);
+    }
 }

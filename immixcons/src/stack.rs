@@ -1,6 +1,5 @@
 use libc::{getcontext, pthread_attr_getstack};
 use log::trace;
-use std::cell::RefCell;
 use std::hint::black_box;
 use std::mem::{size_of, MaybeUninit};
 use std::slice::from_raw_parts;

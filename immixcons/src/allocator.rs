@@ -131,5 +131,8 @@ pub trait AllocHeader: Sized {
     fn header_size() -> usize {
         (size_of::<Self>() + constants::ALLOC_ALIGN_BYTES - 1) & !(constants::ALLOC_ALIGN_BYTES - 1)
     }
+
+    /// This constant needs to be set to be able to mask out tagged pointer tag bits
+    const tag_mask: usize = !0x0;
 }
 // ANCHOR_END: DefAllocHeader

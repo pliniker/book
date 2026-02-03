@@ -14,7 +14,7 @@ pub trait AsNonNull {
 
 // Pointer tag values and masks using the lowest 2 bits
 // ANCHOR: TaggedPtrTags
-const TAG_MASK: usize = 0x3;
+pub const TAG_MASK: usize = 0x3;
 pub const TAG_SYMBOL: usize = 0x0;
 pub const TAG_PAIR: usize = 0x1;
 pub const TAG_OBJECT: usize = 0x2;

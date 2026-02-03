@@ -9,7 +9,8 @@ mod rawptr;
 mod stack;
 
 pub use crate::allocator::{
-    AllocError, AllocHeader, AllocObject, AllocRaw, AllocTypeId, ArraySize, Mark, SizeClass,
+    AllocError, AllocHeader, AllocObject, AllocRaw, AllocTypeId, ArraySize, GcError, Mark,
+    SizeClass,
 };
 
 pub use crate::stack::SystemStackInfo;

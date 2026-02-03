@@ -8,6 +8,7 @@ use std::slice::from_raw_parts_mut;
 use crate::allocator::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, Mark, SizeClass,
 };
+use crate::blockmeta::BlockMeta;
 use crate::bumpblock::BumpBlock;
 use crate::constants;
 use crate::rawptr::RawPtr;
@@ -111,17 +112,20 @@ impl BlockList {
     /// Using best effort logic, estimate if a pointer is a valid heap
     /// pointer.
     fn is_conservatively_a_ptr(&self, ptr: usize) -> bool {
-        // In theory we could check low bits for pointer alignment,
-        // in reality low bits may contain tag information
-        //let low_bits = ptr & constants::ALLOC_ALIGN_MASK;
-        //low_bits < 0xf etc
+        // Regarding the low bits of any word:
+        // these bits may be nonzero if they're used for pointer tagging.
+        // We have to mask out low bits just to be certain.
 
         let block_base = ptr & constants::BLOCK_PTR_MASK;
-        let block_offset = ptr & !constants::BLOCK_PTR_MASK;
+        let block_offset = (ptr & !constants::BLOCK_PTR_MASK) & !0xf;
 
-        // TODO also check object map
+        if let Some(ref block) = self.rest.get(&block_base) {
+            let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
+            return block_offset < constants::ALLOC_UPPER_EXTENT
+                && meta.is_object_marked(block_offset);
+        }
 
-        block_offset < constants::ALLOC_UPPER_EXTENT && self.rest.contains_key(&block_base)
+        false
     }
 }
 
@@ -226,9 +230,6 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         let total_size = header_size + object_size;
 
         // round the size to the next word boundary to keep objects aligned and get the size class
-        // TODO BUG? should this be done separately for header and object?
-        //  If the base allocation address is where the header gets placed, perhaps
-        //  this breaks the double-word alignment object alignment desire?
         let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the object
@@ -251,7 +252,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         // Mark this object in the block's object map
         let object_offset = object_space as usize - dest.block as usize;
         unsafe {
-            let mut meta = crate::blockmeta::BlockMeta::attach(dest.block);
+            let mut meta = BlockMeta::attach(dest.block);
             meta.mark_object(object_offset);
         }
 
@@ -294,7 +295,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         // Mark this object in the block's object map
         let object_offset = array_space as usize - dest.block as usize;
         unsafe {
-            let mut meta = crate::blockmeta::BlockMeta::attach(dest.block);
+            let mut meta = BlockMeta::attach(dest.block);
             meta.mark_object(object_offset);
         }
 
@@ -324,18 +325,19 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     }
     // ANCHOR_END: DefGetObject
 
+    /// Run a garbage collection iteration
     fn gc(&self) -> Result<(), GcError> {
-        // TODO
-        // 1. ~scan stack~
-        // 2. ~filter for managed heap pointers~
-        // 3. trace
-        // 4. collect
-        // 5. <unclear> manage blocks
         let blocks = unsafe { &mut *self.blocks.get() };
 
+        // 1. stack scan for things that could be pointers into the heap
         let mut stack_scan = Vec::new();
-        self.stack
-            .scan(&mut stack_scan, |ptr| blocks.is_conservatively_a_ptr(ptr));
+        self.stack.scan(&mut stack_scan, |ptr| {
+            blocks.is_conservatively_a_ptr(ptr & Self::Header::tag_mask)
+        });
+
+        // 2. trace
+        // 3. collect
+        // 4. manage blocks
 
         Ok(())
     }
@@ -530,7 +532,7 @@ mod tests {
                 let untyped_ptr = ptr.as_untyped();
                 let block_base = (untyped_ptr.as_ptr() as usize) & constants::BLOCK_PTR_MASK;
                 let object_offset = untyped_ptr.as_ptr() as usize - block_base;
-                let meta = unsafe { crate::blockmeta::BlockMeta::attach(block_base as *const u8) };
+                let meta = unsafe { BlockMeta::attach(block_base as *const u8) };
                 assert!(meta.is_object_marked(object_offset));
             }
 

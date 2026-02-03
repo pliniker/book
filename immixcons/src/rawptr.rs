@@ -53,3 +53,48 @@ impl<T: Sized> PartialEq for RawPtr<T> {
         self.ptr == other.ptr
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_as_ptr_addr_clone_eq_untyped_as_ref_on_copyable() {
+        let x: usize = 0x1234_5678;
+        let rp = RawPtr::new(&x as *const usize);
+
+        // as_ptr & addr
+        assert_eq!(rp.as_ptr(), &x as *const usize);
+        assert_eq!(rp.addr(), (&x as *const usize) as usize);
+
+        // Clone and Copy behavior
+        let rp2 = rp.clone();
+        assert!(rp2 == rp);
+        let rp3 = rp;
+        assert!(rp3 == rp2);
+
+        // as_untyped
+        let untyped = rp.as_untyped();
+        assert_eq!(untyped.as_ptr() as usize, rp.as_ptr() as usize);
+
+        // as_ref is unsafe
+        unsafe {
+            let r = rp.as_ref();
+            assert_eq!(*r, x);
+        }
+    }
+
+    #[test]
+    fn test_as_ref_for_noncopy_types() {
+        let s = String::from("hello world");
+        let rp = RawPtr::new(&s as *const String);
+
+        unsafe {
+            let r = rp.as_ref();
+            assert_eq!(r, &s);
+        }
+
+        // Also ensure addr points correctly
+        assert_eq!(rp.addr(), (&s as *const String) as usize);
+    }
+}

@@ -17,9 +17,18 @@ pub struct BumpBlock {
 // ANCHOR_END: DefBumpBlock
 
 impl BumpBlock {
-    /// Create a new block of heap space and it's metadata, placing a
-    /// pointer to the metadata in the first word of the block.
+    /// Start working with a new block, wiping lines and object map clean
     pub unsafe fn new(block: *const u8) -> BumpBlock {
+        BlockMeta::new(block);
+        BumpBlock {
+            cursor: block.add(constants::BLOCK_CAPACITY),
+            limit: block,
+            block: block,
+        }
+    }
+
+    /// Attach to an existing Block, making no modifications
+    pub unsafe fn attach(block: *const u8) -> BumpBlock {
         BumpBlock {
             cursor: block.add(constants::BLOCK_CAPACITY),
             limit: block,
@@ -45,7 +54,7 @@ impl BumpBlock {
         let next_ptr = ptr.checked_sub(alloc_size)? & constants::ALLOC_ALIGN_MASK;
 
         if next_ptr < limit {
-            let block_relative_limit = unsafe { self.limit.sub(self.block as usize) } as usize;
+            let block_relative_limit = (self.limit as usize) - (self.block as usize);
 
             if block_relative_limit > 0 {
                 let meta = unsafe { BlockMeta::attach(self.block) };
@@ -131,7 +140,7 @@ mod tests {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         // This block has an available hole as the second half of the block
         let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
-        let mut meta = unsafe { BlockMeta::attach(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
 
         for i in 0..(constants::LINE_COUNT / 2) {
             meta.mark_line(i);
@@ -155,7 +164,7 @@ mod tests {
 
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
-        let mut meta = unsafe { BlockMeta::attach(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
@@ -169,5 +178,74 @@ mod tests {
 
         println!("count={count}");
         assert!(count == 0);
+    }
+
+    #[test]
+    fn test_attach_preserves_metadata_and_block_properties() {
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+
+        // Initialize metadata and mark a line
+        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        meta.mark_line(3);
+
+        // Attach to the block (should not reset metadata)
+        let b = unsafe { BumpBlock::attach(block.as_ptr()) };
+
+        // block pointer should be correct
+        assert_eq!(b.block_ptr(), block.as_ptr());
+
+        // initial hole should be the entire block
+        assert_eq!(b.current_hole_size(), constants::BLOCK_CAPACITY);
+
+        // verify the line mark we set earlier is still present
+        let raw = block.as_ptr();
+        let line_mark = unsafe { *raw.add(constants::LINE_MARK_START + 3) };
+        assert_eq!(line_mark, 1);
+    }
+
+    #[test]
+    fn test_write_writes_at_offset() {
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
+
+        // Write a u32 at offset 0
+        unsafe {
+            let p = b.write::<u32>(0xDEADBEEF_u32, 0);
+            assert_eq!(*p, 0xDEADBEEF_u32);
+        }
+
+        // Write another value at a different offset
+        let offset = constants::ALLOC_ALIGN_BYTES * 2;
+        unsafe {
+            let p2 = b.write::<u32>(0xCAFEBABE_u32, offset);
+            assert_eq!(*p2, 0xCAFEBABE_u32);
+        }
+    }
+
+    #[test]
+    fn test_attach_write_monomorphization() {
+        let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let mut b = unsafe { BumpBlock::attach(block.as_ptr()) };
+
+        unsafe {
+            // u32 write via attached bump block
+            let p1 = b.write::<u32>(0xAABBCCDD_u32, 8);
+            assert_eq!(*p1, 0xAABBCCDD_u32);
+
+            // u64 write via attached bump block to force another monomorphization
+            let p2 = b.write::<u64>(0xDEADBEEFDEADBEEF_u64, 16);
+            assert_eq!(*p2, 0xDEADBEEFDEADBEEF_u64);
+
+            // write a small struct to exercise a third instantiation
+            #[derive(PartialEq, Debug)]
+            struct S {
+                a: u32,
+                b: u32,
+            }
+
+            let s = S { a: 1, b: 2 };
+            let ps = b.write::<S>(S { a: 1, b: 2 }, 32);
+            assert_eq!(*ps, s);
+        }
     }
 }

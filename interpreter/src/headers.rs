@@ -12,7 +12,7 @@ use crate::list::List;
 use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
-use crate::pointerops::{AsNonNull, Tagged};
+use crate::pointerops::{AsNonNull, Tagged, TAG_MASK};
 use crate::symbol::Symbol;
 use crate::taggedptr::FatPtr;
 use crate::text::Text;
@@ -138,6 +138,8 @@ impl AllocHeader for ObjectHeader {
     fn type_id(&self) -> TypeList {
         self.type_id
     }
+
+    const tag_mask: usize = TAG_MASK;
 }
 
 /// Apply the type ID to each native type

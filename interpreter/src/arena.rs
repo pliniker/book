@@ -4,8 +4,8 @@
 use std::ptr::NonNull;
 
 use immixcons::{
-    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, RawPtr, SizeClass,
-    StickyImmixHeap,
+    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, ImmixConsHeap, Mark,
+    RawPtr, SizeClass,
 };
 
 use crate::headers::TypeList;
@@ -55,14 +55,14 @@ impl AllocHeader for ArenaHeader {
 /// pointers that need to be traced.
 // ANCHOR: DefArena
 pub struct Arena {
-    heap: StickyImmixHeap<ArenaHeader>,
+    heap: ImmixConsHeap<ArenaHeader>,
 }
 // ANCHOR_END: DefArena
 
 impl Arena {
     pub fn new() -> Arena {
         Arena {
-            heap: StickyImmixHeap::new(),
+            heap: ImmixConsHeap::new(),
         }
     }
 }
@@ -88,6 +88,10 @@ impl AllocRaw for Arena {
     }
 
     fn get_object(_header: NonNull<Self::Header>) -> NonNull<()> {
+        unimplemented!()
+    }
+
+    fn gc(&self) -> Result<(), GcError> {
         unimplemented!()
     }
 }
