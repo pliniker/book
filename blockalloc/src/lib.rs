@@ -51,10 +51,10 @@ impl Block {
             return Err(BlockError::BadRequest);
         }
 
-        Ok(Block {
-            ptr: internal::alloc_block(size)?,
-            size,
-        })
+        let ptr = internal::alloc_block(size)?;
+        println!("BLOCK alloc {:x}", ptr.addr());
+
+        Ok(Block { ptr, size })
     }
     // ANCHOR_END: BlockNew
 
@@ -90,6 +90,7 @@ impl Block {
 
 impl Drop for Block {
     fn drop(&mut self) {
+        println!("BLOCK freed {:x}", self.ptr.addr());
         internal::dealloc_block(self.ptr, self.size);
     }
 }

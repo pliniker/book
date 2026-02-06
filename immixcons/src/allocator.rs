@@ -129,7 +129,8 @@ pub trait AllocHeader: Sized {
 
     /// Get the header size, to the next allocator-aligned number of bytes
     fn header_size() -> usize {
-        (size_of::<Self>() + constants::ALLOC_ALIGN_BYTES - 1) & !(constants::ALLOC_ALIGN_BYTES - 1)
+        (size_of::<Self>() + (constants::ALLOC_ALIGN_BYTES - 1)
+            & !(constants::ALLOC_ALIGN_BYTES - 1))
     }
 
     /// This constant needs to be set to be able to mask out tagged pointer tag bits

@@ -92,6 +92,9 @@ impl BlockList {
             None => {
                 let block = Block::new(constants::BLOCK_SIZE)?;
                 let mut overflow = unsafe { BumpBlock::new(block.as_ptr()) };
+                let block_ptr = block.as_ptr();
+
+                self.rest.insert(block.addr(), block);
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation
@@ -101,7 +104,7 @@ impl BlockList {
 
                 self.overflow = Some(overflow);
 
-                AllocDest::new(block.as_ptr(), space)
+                AllocDest::new(block_ptr, space)
             }
         };
 
@@ -474,7 +477,6 @@ mod tests {
         // check that all values of allocated words match the original
         // numbers written, that no heap corruption occurred
         for (i, ob) in obs.iter().enumerate() {
-            println!("{} {}", i, unsafe { ob.as_ref() });
             assert!(i == unsafe { *ob.as_ref() })
         }
     }
