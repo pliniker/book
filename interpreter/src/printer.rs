@@ -6,17 +6,9 @@ use crate::taggedptr::Value;
 
 /// Trait for using a `Value` lifted pointer in the `Display` trait
 pub trait Print {
-    fn print(
-        &self,
-        _guard: &dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result;
+    fn print(&self, _guard: &dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result;
 
-    fn debug(
-        &self,
-        _guard: &dyn MutatorScope,
-        f: &mut fmt::Formatter,
-    ) -> fmt::Result {
+    fn debug(&self, _guard: &dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         self.print(_guard, f)
     }
 
