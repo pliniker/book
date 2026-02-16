@@ -1,4 +1,4 @@
-use libc::{getcontext, pthread_attr_getstack};
+use libc::{getcontext, pthread_attr_getstack, pthread_getattr_np, pthread_self};
 use log::trace;
 use std::hint::black_box;
 use std::mem::{size_of, MaybeUninit};
@@ -10,13 +10,18 @@ pub struct SystemStackInfo {
 
 impl SystemStackInfo {
     pub fn new() -> SystemStackInfo {
-        let mut context = MaybeUninit::zeroed();
+        let mut attr = MaybeUninit::zeroed();
+        let result = unsafe { pthread_getattr_np(pthread_self(), attr.as_mut_ptr()) };
+        if result != 0 {
+            panic!("pthread_getattr_np() returned {}", result);
+        }
+
         let mut stack_base = MaybeUninit::zeroed();
         let mut stack_size = MaybeUninit::zeroed();
 
         let result = unsafe {
             pthread_attr_getstack(
-                context.as_mut_ptr(),
+                attr.as_mut_ptr(),
                 stack_base.as_mut_ptr(),
                 stack_size.as_mut_ptr(),
             )
@@ -57,6 +62,7 @@ impl SystemStackInfo {
         }
 
         let stack_len = (stack_top - stack_base) / word_size;
+        trace!("[stack_scan] top={:x} base={:x}", stack_top, stack_base);
         let slice = unsafe { from_raw_parts(stack_base as *const usize, stack_len) };
 
         for stack_item in slice {
@@ -75,5 +81,20 @@ impl SystemStackInfo {
 impl Default for SystemStackInfo {
     fn default() -> SystemStackInfo {
         SystemStackInfo::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_sanity() {
+        let stack = SystemStackInfo::new();
+        let mut stack_scan = Vec::new();
+
+        // simply shouldn't cause any segfaults, bounds errors etc
+        stack.scan(&mut stack_scan, |_| true);
     }
 }

@@ -139,7 +139,7 @@ impl AllocHeader for ObjectHeader {
         self.type_id
     }
 
-    const tag_mask: usize = TAG_MASK;
+    const TAG_MASK: usize = TAG_MASK;
 }
 
 /// Apply the type ID to each native type

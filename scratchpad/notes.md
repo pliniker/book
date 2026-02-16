@@ -4,12 +4,15 @@
 
 ImmixCons:
 
-- [ ] identifying valid root pointers from stack scan
+- [X] identifying valid root pointers from stack scan
   - [X] refactor: BumpBlock should only be used for head and overflow; should
         only have a Block::as_mut_ptr() ptr
   - [X] allocator needs to mark object map when object written
-  - [ ] root pointer id needs to check object map
+  - [X] root pointer id needs to check object map
+- [X] stack scan logic
 - [ ] object tracing via object header
+  - [ ] trace within interpreter objects
+  - [ ] array trace
 - [ ] marking objects, lines, object maps, blocks
 - [ ] sweeping
 - [ ] block management: recycling, reclaiming

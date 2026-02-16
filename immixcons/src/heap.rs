@@ -335,10 +335,14 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         // 1. stack scan for things that could be pointers into the heap
         let mut stack_scan = Vec::new();
         self.stack.scan(&mut stack_scan, |ptr| {
-            blocks.is_conservatively_a_ptr(ptr & Self::Header::tag_mask)
+            blocks.is_conservatively_a_ptr(ptr & Self::Header::TAG_MASK)
         });
 
         // 2. trace
+        for ptr in stack_scan.iter() {
+            let mut header = Self::get_header(unsafe { NonNull::new_unchecked(*ptr as *mut ()) });
+            unsafe { header.as_mut().mark(Mark::Marked) };
+        }
         // 3. collect
         // 4. manage blocks
 
@@ -361,7 +365,7 @@ mod tests {
 
     struct TestHeader {
         _size_class: SizeClass,
-        _mark: Mark,
+        mark: Mark,
         type_id: TestTypeId,
         _size_bytes: u32,
     }
@@ -382,7 +386,7 @@ mod tests {
         fn new<O: AllocObject<Self::TypeId>>(size: u32, size_class: SizeClass, mark: Mark) -> Self {
             TestHeader {
                 _size_class: size_class,
-                _mark: mark,
+                mark: mark,
                 type_id: O::TYPE_ID,
                 _size_bytes: size,
             }
@@ -391,16 +395,18 @@ mod tests {
         fn new_array(size: u32, size_class: SizeClass, mark: Mark) -> Self {
             TestHeader {
                 _size_class: size_class,
-                _mark: mark,
+                mark: mark,
                 type_id: TestTypeId::Array,
                 _size_bytes: size,
             }
         }
 
-        fn mark(&mut self, _value: Mark) {}
+        fn mark(&mut self, value: Mark) {
+            self.mark = value;
+        }
 
-        fn mark_is(&self, _value: Mark) -> bool {
-            true
+        fn mark_is(&self, value: Mark) -> bool {
+            self.mark == value
         }
 
         fn size_class(&self) -> SizeClass {
@@ -557,6 +563,32 @@ mod tests {
             }
 
             Err(_) => panic!("Allocation failed"),
+        }
+    }
+
+    #[test]
+    fn test_gc() {
+        let mem = ImmixConsHeap::<TestHeader>::new();
+
+        // keep a set of pointers on the stack
+        let obs: [_; 100] = [mem.alloc(99).unwrap(); 100];
+
+        // check that they're not marked yet
+        for ptr in obs {
+            let header: NonNull<TestHeader> = ImmixConsHeap::get_header(unsafe {
+                NonNull::new_unchecked(ptr.as_untyped().as_ptr())
+            });
+            assert!(unsafe { header.as_ref().mark_is(Mark::Allocated) });
+        }
+
+        mem.gc();
+
+        // now they should be marked
+        for ptr in obs {
+            let header: NonNull<TestHeader> = ImmixConsHeap::get_header(unsafe {
+                NonNull::new_unchecked(ptr.as_untyped().as_ptr())
+            });
+            assert!(unsafe { header.as_ref().mark_is(Mark::Marked) });
         }
     }
 }

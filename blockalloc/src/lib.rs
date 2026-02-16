@@ -52,7 +52,6 @@ impl Block {
         }
 
         let ptr = internal::alloc_block(size)?;
-        println!("BLOCK alloc {:x}", ptr.addr());
 
         Ok(Block { ptr, size })
     }
@@ -90,7 +89,6 @@ impl Block {
 
 impl Drop for Block {
     fn drop(&mut self) {
-        println!("BLOCK freed {:x}", self.ptr.addr());
         internal::dealloc_block(self.ptr, self.size);
     }
 }
