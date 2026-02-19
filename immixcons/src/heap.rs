@@ -112,23 +112,23 @@ impl BlockList {
     }
     // ANCHOR_END: DefOverflowAlloc
 
-    /// Using best effort logic, estimate if a pointer is a valid heap
-    /// pointer.
+    /// Using best effort logic, estimate if a pointer is a valid heap pointer.
+    ///
+    /// 1. Masking the pointer to get a potential block base, check that the
+    ///    base exists in the block list
+    /// 2. Masking the pointer to get a potential block offset, check that the
+    ///    offset is marked in the block's object map
+    #[inline(always)]
     fn is_conservatively_a_ptr(&self, ptr: usize) -> bool {
-        // Regarding the low bits of any word:
-        // these bits may be nonzero if they're used for pointer tagging.
-        // We have to mask out low bits just to be certain.
-
         let block_base = ptr & constants::BLOCK_PTR_MASK;
-        let block_offset = (ptr & !constants::BLOCK_PTR_MASK) & !0xf;
 
         if let Some(ref block) = self.rest.get(&block_base) {
+            let block_offset = ptr & !constants::BLOCK_PTR_MASK;
             let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
-            return block_offset < constants::ALLOC_UPPER_EXTENT
-                && meta.is_object_marked(block_offset);
+            block_offset < constants::ALLOC_UPPER_EXTENT && meta.is_object_marked(block_offset)
+        } else {
+            false
         }
-
-        false
     }
 }
 
@@ -556,7 +556,6 @@ mod tests {
             Ok(s) => {
                 let untyped_ptr = s.as_untyped();
                 let header_ptr = ImmixConsHeap::<TestHeader>::get_header(untyped_ptr);
-                dbg!(header_ptr);
                 let header = unsafe { &*header_ptr.as_ptr() as &TestHeader };
 
                 assert!(header.type_id() == TestTypeId::Stringish);
@@ -571,7 +570,13 @@ mod tests {
         let mem = ImmixConsHeap::<TestHeader>::new();
 
         // keep a set of pointers on the stack
-        let obs: [_; 100] = [mem.alloc(99).unwrap(); 100];
+        const COUNT: usize = 100;
+        let mut obs: [_; COUNT] = [mem.alloc(99).unwrap(); COUNT];
+        for ptr in obs.each_mut() {
+            *ptr = mem.alloc(99).unwrap();
+        }
+
+        println!("Array at {:p}", &obs);
 
         // check that they're not marked yet
         for ptr in obs {

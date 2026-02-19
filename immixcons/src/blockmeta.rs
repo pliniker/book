@@ -11,6 +11,11 @@ pub struct BlockMeta {
 
 impl BlockMeta {
     /// Attach to a block, resetting its lines and object map to clean slate state
+    ///
+    /// The caller must ensure that `block_ptr` points to a valid block whose
+    /// metadata has already been initialized. This does NOT reset any metadata
+    /// (unlike `BlockMeta::new`), and so is appropriate for reading/updating
+    /// metadata for an existing block.
     pub unsafe fn new(block_ptr: *const u8) -> BlockMeta {
         let mut meta = BlockMeta {
             lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *mut u8 },
@@ -24,7 +29,6 @@ impl BlockMeta {
 
     /// Attach to an existing block's metadata without resetting it.
     ///
-    /// # Safety
     /// The caller must ensure that `block_ptr` points to a valid block whose
     /// metadata has already been initialized. This does NOT reset any metadata
     /// (unlike `BlockMeta::new`), and so is appropriate for reading/updating
@@ -43,6 +47,7 @@ impl BlockMeta {
     }
 
     unsafe fn as_line_mark(&mut self, line: usize) -> &mut u8 {
+        debug_assert!(line < constants::LINE_COUNT);
         &mut *self.lines.add(line)
     }
 
@@ -116,6 +121,8 @@ impl BlockMeta {
     /// Find the next marked object starting from the given offset (inclusive).
     /// Returns the offset of the next marked object, or None if no more objects are marked.
     pub fn find_next_object(&self, starting_offset: usize) -> Option<usize> {
+        debug_assert!(starting_offset < constants::ALLOC_UPPER_EXTENT);
+
         let start_slot = starting_offset / constants::ALLOC_ALIGN_BYTES;
 
         for slot in start_slot..constants::OBJECT_MAP_SLOTS {
@@ -145,6 +152,7 @@ impl BlockMeta {
         starting_at: usize,
         alloc_size: usize,
     ) -> Option<(usize, usize)> {
+        debug_assert!(starting_at < constants::ALLOC_UPPER_EXTENT);
         // The count of consecutive avaliable holes. Must take into account a conservatively marked
         // hole at the beginning of the sequence.
         let mut count = 0;
