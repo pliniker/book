@@ -1,7 +1,6 @@
 use core::pin::{pin, Pin};
 use libc::{getcontext, pthread_attr_getstack, pthread_getattr_np, pthread_self};
 use log::trace;
-use std::hint::black_box;
 use std::mem::{size_of, MaybeUninit};
 use std::slice::from_raw_parts;
 
@@ -85,7 +84,7 @@ impl SystemStackInfo {
 
         // there's nothing guaranteeing the ordering of these function
         // local vars on the stack, compiler is free to break all this horribly
-        let stack_ptr_marker = pin!(result);
+        let stack_ptr_marker = pin!(context);
 
         let mut stack_ptr = (&stack_ptr_marker as *const Pin<_> as *const ()).addr();
         let mut stack_base = self.base;
@@ -115,9 +114,6 @@ impl SystemStackInfo {
                 results.push(potential_ptr);
             }
         }
-
-        black_box(&context);
-        black_box(&stack_ptr_marker);
     }
 }
 

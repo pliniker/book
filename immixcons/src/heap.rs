@@ -2,7 +2,7 @@ use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::ptr::{write, NonNull};
+use std::ptr::write;
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
@@ -308,22 +308,22 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 
     /// Return the object header for a given object pointer
     // ANCHOR: DefGetHeader
-    fn get_header(object: NonNull<()>) -> NonNull<Self::Header> {
+    fn get_header(object: RawPtr<()>) -> RawPtr<Self::Header> {
         let padded_header = Self::Header::header_size();
         unsafe {
             let header_ptr = (object.as_ptr() as *const u8).sub(padded_header) as *mut Self::Header;
-            NonNull::new_unchecked(header_ptr)
+            RawPtr::new(header_ptr)
         }
     }
     // ANCHOR_END: DefGetHeader
 
     /// Return the object from it's header address
     // ANCHOR: DefGetObject
-    fn get_object(header: NonNull<Self::Header>) -> NonNull<()> {
+    fn get_object(header: RawPtr<Self::Header>) -> RawPtr<()> {
         let padded_header = Self::Header::header_size();
         unsafe {
             let obj_ptr = (header.as_ptr() as *const u8).add(padded_header) as *mut ();
-            NonNull::new_unchecked(obj_ptr)
+            RawPtr::new(obj_ptr)
         }
     }
     // ANCHOR_END: DefGetObject
@@ -340,8 +340,8 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 
         // 2. trace
         for ptr in stack_scan.iter() {
-            let mut header = Self::get_header(unsafe { NonNull::new_unchecked(*ptr as *mut ()) });
-            unsafe { header.as_mut().mark(Mark::Marked) };
+            let header = Self::get_header(RawPtr::new(*ptr as *mut ()));
+            unsafe { header.as_ref().mark(Mark::Marked) };
         }
         // 3. collect
         // 4. manage blocks
@@ -360,22 +360,25 @@ impl<H> Default for ImmixConsHeap<H> {
 mod tests {
 
     use super::*;
-    use crate::allocator::{AllocObject, AllocTypeId, Mark, SizeClass};
+    use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
+    use std::cell::Cell;
     use std::slice::from_raw_parts;
 
     struct TestHeader {
         _size_class: SizeClass,
-        mark: Mark,
+        mark: Cell<Mark>,
         type_id: TestTypeId,
         _size_bytes: u32,
     }
 
     #[derive(PartialEq, Copy, Clone)]
     enum TestTypeId {
+        Array,
         Biggish,
+        List,
+        Something,
         Stringish,
         Usizeish,
-        Array,
     }
 
     impl AllocTypeId for TestTypeId {}
@@ -386,7 +389,7 @@ mod tests {
         fn new<O: AllocObject<Self::TypeId>>(size: u32, size_class: SizeClass, mark: Mark) -> Self {
             TestHeader {
                 _size_class: size_class,
-                mark: mark,
+                mark: Cell::new(mark),
                 type_id: O::TYPE_ID,
                 _size_bytes: size,
             }
@@ -395,18 +398,18 @@ mod tests {
         fn new_array(size: u32, size_class: SizeClass, mark: Mark) -> Self {
             TestHeader {
                 _size_class: size_class,
-                mark: mark,
+                mark: Cell::new(mark),
                 type_id: TestTypeId::Array,
                 _size_bytes: size,
             }
         }
 
-        fn mark(&mut self, value: Mark) {
-            self.mark = value;
+        fn mark(&self, value: Mark) {
+            self.mark.set(value)
         }
 
         fn mark_is(&self, value: Mark) -> bool {
-            self.mark == value
+            self.mark.get() == value
         }
 
         fn size_class(&self) -> SizeClass {
@@ -420,6 +423,33 @@ mod tests {
         fn type_id(&self) -> TestTypeId {
             self.type_id
         }
+
+        fn trace<TestTrace>(&self, v: &TestTrace) {
+            if self.type_id() == TestTypeId::List {
+                println!("TRACING LIST!");
+                unsafe {
+                    let list = self.to_list();
+                    list.as_ref().trace(v);
+                }
+            }
+        }
+    }
+
+    impl TestHeader {
+        unsafe fn to_list(&self) -> RawPtr<List> {
+            let this: *const u8 = self as *const TestHeader as *const u8;
+            let that = this.add(Self::header_size());
+            RawPtr::new(that as *const List)
+        }
+    }
+
+    struct TestTrace {}
+
+    impl TraceVisitor for TestTrace {
+        fn visit(&self, object: RawPtr<()>) {
+            println!("VISIT {:p}", object.as_ptr());
+            // TODO
+        }
     }
 
     struct Big {
@@ -432,6 +462,48 @@ mod tests {
                 _huge: [0u8; constants::BLOCK_SIZE + 1],
             }
         }
+    }
+
+    struct Something {
+        _inner: usize,
+    }
+
+    impl Default for Something {
+        fn default() -> Something {
+            Something { _inner: 0 }
+        }
+    }
+
+    impl AllocObject<TestTypeId> for Something {
+        const TYPE_ID: TestTypeId = TestTypeId::Something;
+    }
+
+    struct List {
+        next: Option<RawPtr<List>>,
+        value: u8,
+    }
+
+    impl List {
+        fn new(value: u8, next: RawPtr<List>) -> List {
+            List {
+                next: Some(next),
+                value,
+            }
+        }
+
+        fn tail(value: u8) -> List {
+            List { next: None, value }
+        }
+
+        fn trace(&self, v: &TestTrace) {
+            if let Some(next) = self.next {
+                v.visit(next.as_untyped());
+            }
+        }
+    }
+
+    impl AllocObject<TestTypeId> for List {
+        const TYPE_ID: TestTypeId = TestTypeId::List;
     }
 
     impl AllocObject<TestTypeId> for Big {
@@ -566,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gc() {
+    fn test_gc_stackscan() {
         let mem = ImmixConsHeap::<TestHeader>::new();
 
         // keep a set of pointers on the stack
@@ -576,13 +648,9 @@ mod tests {
             *ptr = mem.alloc(99).unwrap();
         }
 
-        println!("Array at {:p}", &obs);
-
         // check that they're not marked yet
         for ptr in obs {
-            let header: NonNull<TestHeader> = ImmixConsHeap::get_header(unsafe {
-                NonNull::new_unchecked(ptr.as_untyped().as_ptr())
-            });
+            let header: RawPtr<TestHeader> = ImmixConsHeap::get_header(ptr.as_untyped());
             assert!(unsafe { header.as_ref().mark_is(Mark::Allocated) });
         }
 
@@ -590,10 +658,34 @@ mod tests {
 
         // now they should be marked
         for ptr in obs {
-            let header: NonNull<TestHeader> = ImmixConsHeap::get_header(unsafe {
-                NonNull::new_unchecked(ptr.as_untyped().as_ptr())
-            });
+            let header: RawPtr<TestHeader> = ImmixConsHeap::get_header(ptr.as_untyped());
             assert!(unsafe { header.as_ref().mark_is(Mark::Marked) });
+        }
+    }
+
+    #[test]
+    fn test_gc_trace() {
+        let mem = ImmixConsHeap::<TestHeader>::new();
+
+        const COUNT: u8 = 99;
+        let mut head = mem.alloc(List::tail(COUNT)).unwrap();
+        for i in COUNT..0 {
+            head = mem.alloc(List::new(i, head)).unwrap();
+        }
+
+        mem.gc();
+
+        unsafe {
+            let mut count = 0;
+            while let Some(next) = head.as_ref().next {
+                let header: RawPtr<TestHeader> = ImmixConsHeap::get_header(head.as_untyped());
+                assert!(header.as_ref().mark_is(Mark::Marked));
+                assert!(head.as_ref().value == count);
+                head = next;
+                count += 1;
+            }
+            println!("Count: {}", count);
+            assert!(count == COUNT);
         }
     }
 }

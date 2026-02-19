@@ -1,7 +1,6 @@
 use crate::constants;
 use crate::rawptr::RawPtr;
 use std::mem::size_of;
-use std::ptr::NonNull;
 
 /// An allocation error type
 // ANCHOR: DefAllocError
@@ -39,10 +38,10 @@ pub trait AllocRaw {
     fn alloc_array(&self, size_bytes: ArraySize) -> Result<RawPtr<u8>, AllocError>;
 
     /// Given a bare pointer to an object, return the expected header address
-    fn get_header(object: NonNull<()>) -> NonNull<Self::Header>;
+    fn get_header(object: RawPtr<()>) -> RawPtr<Self::Header>;
 
     /// Given a bare pointer to an object's header, return the expected object address
-    fn get_object(header: NonNull<Self::Header>) -> NonNull<()>;
+    fn get_object(header: RawPtr<Self::Header>) -> RawPtr<()>;
 
     /// Run a garbage collection iteration
     fn gc(&self) -> Result<(), GcError>;
@@ -113,7 +112,7 @@ pub trait AllocHeader: Sized {
     fn new_array(size: ArraySize, size_class: SizeClass, mark: Mark) -> Self;
 
     /// Set the Mark value to "marked"
-    fn mark(&mut self, value: Mark);
+    fn mark(&self, value: Mark);
 
     /// Get the current Mark value
     fn mark_is(&self, value: Mark) -> bool;
@@ -132,11 +131,15 @@ pub trait AllocHeader: Sized {
         size_of::<Self>() + (constants::ALLOC_ALIGN_BYTES - 1) & !(constants::ALLOC_ALIGN_BYTES - 1)
     }
 
-    /// Trace into this object. The default behavior is to do nothing.
-    /// This is appropriate for objects that do not refer to other objects.
-    fn trace(&self) {}
+    /// Trace into this object using an instance of TraceVisitor
+    fn trace<V: TraceVisitor>(&self, v: &V);
 
     /// This constant needs to be set to be able to mask out tagged pointer tag bits
     const TAG_MASK: usize = !0x0;
 }
 // ANCHOR_END: DefAllocHeader
+
+/// Counterpart interface for traversing a heap
+pub trait TraceVisitor {
+    fn visit(&self, object: RawPtr<()>);
+}

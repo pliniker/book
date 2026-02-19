@@ -24,13 +24,14 @@ impl<T: Sized> RawPtr<T> {
 
     /// Get the pointer value as a word-sized integer
     pub fn addr(self) -> usize {
-        self.ptr.as_ptr() as usize
+        self.ptr.as_ptr().addr()
     }
 
     /// Get the pointer as a null-type value
-    // XXX: is this really needed? Any added benefit?
-    pub fn as_untyped(self) -> NonNull<()> {
-        self.ptr.cast()
+    pub fn as_untyped(self) -> RawPtr<()> {
+        RawPtr {
+            ptr: self.ptr.cast(),
+        }
     }
 
     /// Get a `&` reference to the object. Unsafe because there are no guarantees at this level
