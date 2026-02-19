@@ -7,6 +7,7 @@ use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, Mark, SizeClass,
+    TraceVisitor,
 };
 use crate::blockmeta::BlockMeta;
 use crate::bumpblock::BumpBlock;
@@ -341,7 +342,10 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         // 2. trace
         for ptr in stack_scan.iter() {
             let header = Self::get_header(RawPtr::new(*ptr as *mut ()));
-            unsafe { header.as_ref().mark(Mark::Marked) };
+            unsafe {
+                header.as_ref().mark(Mark::Marked);
+                header.as_ref().trace(); // TODO
+            };
         }
         // 3. collect
         // 4. manage blocks
@@ -376,7 +380,6 @@ mod tests {
         Array,
         Biggish,
         List,
-        Something,
         Stringish,
         Usizeish,
     }
@@ -424,7 +427,7 @@ mod tests {
             self.type_id
         }
 
-        fn trace<TestTrace>(&self, v: &TestTrace) {
+        fn trace<V: TraceVisitor>(&self, v: &V) {
             if self.type_id() == TestTypeId::List {
                 println!("TRACING LIST!");
                 unsafe {
@@ -464,20 +467,6 @@ mod tests {
         }
     }
 
-    struct Something {
-        _inner: usize,
-    }
-
-    impl Default for Something {
-        fn default() -> Something {
-            Something { _inner: 0 }
-        }
-    }
-
-    impl AllocObject<TestTypeId> for Something {
-        const TYPE_ID: TestTypeId = TestTypeId::Something;
-    }
-
     struct List {
         next: Option<RawPtr<List>>,
         value: u8,
@@ -495,7 +484,7 @@ mod tests {
             List { next: None, value }
         }
 
-        fn trace(&self, v: &TestTrace) {
+        fn trace<V: TraceVisitor>(&self, v: &V) {
             if let Some(next) = self.next {
                 v.visit(next.as_untyped());
             }
@@ -669,12 +658,13 @@ mod tests {
 
         const COUNT: u8 = 99;
         let mut head = mem.alloc(List::tail(COUNT)).unwrap();
-        for i in COUNT..0 {
+        for i in (0..COUNT).rev() {
             head = mem.alloc(List::new(i, head)).unwrap();
         }
 
         mem.gc();
 
+        // such unsafe!
         unsafe {
             let mut count = 0;
             while let Some(next) = head.as_ref().next {
