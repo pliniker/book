@@ -132,7 +132,7 @@ pub trait AllocHeader: Sized {
     }
 
     /// Trace into this object using an instance of TraceVisitor
-    fn trace<V: TraceVisitor>(&self, v: &V);
+    fn trace<V: TraceVisitor>(&self, v: &mut V);
 
     /// This constant needs to be set to be able to mask out tagged pointer tag bits
     const TAG_MASK: usize = !0x0;
@@ -141,5 +141,5 @@ pub trait AllocHeader: Sized {
 
 /// Counterpart interface for traversing a heap
 pub trait TraceVisitor {
-    fn visit(&self, object: RawPtr<()>);
+    fn visit(&mut self, object: RawPtr<()>);
 }

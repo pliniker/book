@@ -38,6 +38,29 @@ impl AllocDest {
     }
 }
 
+/// Structure for collecting pointers across the heap during tracing
+struct PreciseHeapTracer {
+    visited: Vec<RawPtr<()>>,
+}
+
+impl PreciseHeapTracer {
+    fn new() -> PreciseHeapTracer {
+        PreciseHeapTracer {
+            visited: Vec::new(),
+        }
+    }
+
+    fn pop(&mut self) -> Option<RawPtr<()>> {
+        self.visited.pop()
+    }
+}
+
+impl TraceVisitor for PreciseHeapTracer {
+    fn visit(&mut self, object: RawPtr<()>) {
+        self.visited.push(object);
+    }
+}
+
 /// A list of blocks as the current block being allocated into and a list
 /// of full blocks
 // TODO:
@@ -340,13 +363,34 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         });
 
         // 2. trace
+        let mut tracer = PreciseHeapTracer::new();
+
+        // 2.1 trace the stack scan
         for ptr in stack_scan.iter() {
-            let header = Self::get_header(RawPtr::new(*ptr as *mut ()));
+            let header_ptr = Self::get_header(RawPtr::new(*ptr as *mut ()));
             unsafe {
-                header.as_ref().mark(Mark::Marked);
-                header.as_ref().trace(); // TODO
+                let header = header_ptr.as_ref();
+                if header.mark_is(Mark::Marked) {
+                    continue;
+                }
+                header.mark(Mark::Marked);
+                header.trace(&mut tracer);
             };
         }
+
+        // 2.2 trace the heap scan
+        while let Some(object) = tracer.pop() {
+            let header_ptr = Self::get_header(object);
+            unsafe {
+                let header = header_ptr.as_ref();
+                if header.mark_is(Mark::Marked) {
+                    continue;
+                }
+                header.mark(Mark::Marked);
+                header.trace(&mut tracer);
+            }
+        }
+
         // 3. collect
         // 4. manage blocks
 
@@ -427,9 +471,8 @@ mod tests {
             self.type_id
         }
 
-        fn trace<V: TraceVisitor>(&self, v: &V) {
+        fn trace<V: TraceVisitor>(&self, v: &mut V) {
             if self.type_id() == TestTypeId::List {
-                println!("TRACING LIST!");
                 unsafe {
                     let list = self.to_list();
                     list.as_ref().trace(v);
@@ -443,15 +486,6 @@ mod tests {
             let this: *const u8 = self as *const TestHeader as *const u8;
             let that = this.add(Self::header_size());
             RawPtr::new(that as *const List)
-        }
-    }
-
-    struct TestTrace {}
-
-    impl TraceVisitor for TestTrace {
-        fn visit(&self, object: RawPtr<()>) {
-            println!("VISIT {:p}", object.as_ptr());
-            // TODO
         }
     }
 
@@ -484,7 +518,7 @@ mod tests {
             List { next: None, value }
         }
 
-        fn trace<V: TraceVisitor>(&self, v: &V) {
+        fn trace<V: TraceVisitor>(&self, v: &mut V) {
             if let Some(next) = self.next {
                 v.visit(next.as_untyped());
             }
@@ -656,9 +690,9 @@ mod tests {
     fn test_gc_trace() {
         let mem = ImmixConsHeap::<TestHeader>::new();
 
-        const COUNT: u8 = 99;
-        let mut head = mem.alloc(List::tail(COUNT)).unwrap();
-        for i in (0..COUNT).rev() {
+        const COUNT: u8 = 100;
+        let mut head = mem.alloc(List::tail(0)).unwrap();
+        for i in 1..COUNT {
             head = mem.alloc(List::new(i, head)).unwrap();
         }
 
@@ -666,16 +700,15 @@ mod tests {
 
         // such unsafe!
         unsafe {
-            let mut count = 0;
+            let mut count = 99;
             while let Some(next) = head.as_ref().next {
                 let header: RawPtr<TestHeader> = ImmixConsHeap::get_header(head.as_untyped());
                 assert!(header.as_ref().mark_is(Mark::Marked));
                 assert!(head.as_ref().value == count);
                 head = next;
-                count += 1;
+                count -= 1;
             }
-            println!("Count: {}", count);
-            assert!(count == COUNT);
+            assert!(count == 0);
         }
     }
 }
