@@ -66,6 +66,10 @@ impl<'memory> MutatorView<'memory> {
     pub fn nil(&self) -> TaggedScopedPtr<'_> {
         TaggedScopedPtr::nil(self)
     }
+
+    pub fn gc(&self) {
+        self.heap.gc();
+    }
 }
 
 impl MutatorScope for MutatorView<'_> {}
@@ -119,8 +123,14 @@ impl Heap {
     }
     // ANCHOR_END: DefHeapAllocTagged
 
+    /// Return a tagged pointer to a block of u8
     fn alloc_array(&self, capacity: ArraySize) -> Result<RawPtr<u8>, RuntimeError> {
         Ok(self.heap.alloc_array(capacity)?)
+    }
+
+    /// Run a garbage collection iteration
+    fn gc(&self) {
+        self.heap.gc();
     }
 }
 

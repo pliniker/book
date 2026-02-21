@@ -5,7 +5,7 @@ use std::ptr::NonNull;
 
 use immixcons::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, ImmixConsHeap, Mark,
-    RawPtr, SizeClass,
+    RawPtr, SizeClass, TraceVisitor,
 };
 
 use crate::headers::TypeList;
@@ -30,7 +30,7 @@ impl AllocHeader for ArenaHeader {
         ArenaHeader {}
     }
 
-    fn mark(&mut self, _value: Mark) {}
+    fn mark(&self, _value: Mark) {}
 
     fn mark_is(&self, _value: Mark) -> bool {
         true
@@ -46,6 +46,10 @@ impl AllocHeader for ArenaHeader {
 
     fn type_id(&self) -> TypeList {
         TypeList::Symbol
+    }
+
+    fn trace<V: TraceVisitor>(&self, _object: &mut V) {
+        unimplemented!()
     }
 }
 
@@ -83,11 +87,11 @@ impl AllocRaw for Arena {
         unimplemented!()
     }
 
-    fn get_header(_object: NonNull<()>) -> NonNull<Self::Header> {
+    fn get_header(_object: RawPtr<()>) -> RawPtr<Self::Header> {
         unimplemented!()
     }
 
-    fn get_object(_header: NonNull<Self::Header>) -> NonNull<()> {
+    fn get_object(_header: RawPtr<Self::Header>) -> RawPtr<()> {
         unimplemented!()
     }
 

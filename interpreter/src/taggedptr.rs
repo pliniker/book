@@ -12,7 +12,6 @@
 /// type of the object pointed to for certain types, but the object header is
 /// required to provide all other object type ids.
 use std::fmt;
-use std::ptr::NonNull;
 
 use immixcons::{AllocRaw, RawPtr};
 
@@ -226,9 +225,9 @@ impl PartialEq for FatPtr {
 pub union TaggedPtr {
     tag: usize,
     number: isize,
-    symbol: NonNull<Symbol>,
-    pair: NonNull<Pair>,
-    object: NonNull<()>,
+    symbol: RawPtr<Symbol>,
+    pair: RawPtr<Pair>,
+    object: RawPtr<()>,
 }
 // ANCHOR_END: DefTaggedPtr
 
@@ -248,7 +247,7 @@ impl TaggedPtr {
     /// Construct a generic object TaggedPtr
     fn object<T>(ptr: RawPtr<T>) -> TaggedPtr {
         TaggedPtr {
-            object: ptr.tag(TAG_OBJECT).cast::<()>(),
+            object: ptr.tag(TAG_OBJECT).as_untyped(),
         }
     }
 

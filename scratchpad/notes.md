@@ -10,9 +10,10 @@ ImmixCons:
   - [X] allocator needs to mark object map when object written
   - [X] root pointer id needs to check object map
 - [X] stack scan logic
-- [ ] object tracing via object header
+- [X] object tracing via object header
   - [ ] trace within interpreter objects
   - [ ] array trace
+  - [ ] dict trace
 - [ ] marking objects, lines, object maps, blocks
 - [ ] sweeping
 - [ ] block management: recycling, reclaiming

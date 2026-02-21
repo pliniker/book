@@ -66,6 +66,8 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
             println!("## Evaluated:\n```\n{value:?}\n```\n");
         }
 
+        mem.gc();
+
         Ok(value)
     })(mem, line)
     {

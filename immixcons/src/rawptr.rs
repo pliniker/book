@@ -34,6 +34,15 @@ impl<T: Sized> RawPtr<T> {
         }
     }
 
+    /// Cast the pointer to a different type
+    /// Safety: none. Attempting to dereference the pointer will always be
+    /// unsafe.
+    pub fn cast<U: Sized>(self) -> RawPtr<U> {
+        RawPtr {
+            ptr: self.ptr.cast(),
+        }
+    }
+
     /// Get a `&` reference to the object. Unsafe because there are no guarantees at this level
     /// about the internal pointer's validity.
     pub unsafe fn as_ref(&self) -> &T {

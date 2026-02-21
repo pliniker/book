@@ -10,7 +10,7 @@ mod stack;
 
 pub use crate::allocator::{
     AllocError, AllocHeader, AllocObject, AllocRaw, AllocTypeId, ArraySize, GcError, Mark,
-    SizeClass,
+    SizeClass, TraceVisitor,
 };
 
 pub use crate::stack::SystemStackInfo;

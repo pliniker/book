@@ -30,16 +30,16 @@ pub fn get_tag(tagged_word: usize) -> usize {
 /// Pointer tagging operations on RawPtr<T>
 // ANCHOR: DefTagged
 pub trait Tagged<T> {
-    fn tag(self, tag: usize) -> NonNull<T>;
-    fn untag(from: NonNull<T>) -> RawPtr<T>;
+    fn tag(self, tag: usize) -> RawPtr<T>;
+    fn untag(from: RawPtr<T>) -> RawPtr<T>;
 }
 
 impl<T> Tagged<T> for RawPtr<T> {
-    fn tag(self, tag: usize) -> NonNull<T> {
-        unsafe { NonNull::new_unchecked((self.addr() | tag) as *mut T) }
+    fn tag(self, tag: usize) -> RawPtr<T> {
+        RawPtr::new((self.addr() | tag) as *mut T)
     }
 
-    fn untag(from: NonNull<T>) -> RawPtr<T> {
+    fn untag(from: RawPtr<T>) -> RawPtr<T> {
         RawPtr::new((from.as_ptr() as usize & PTR_MASK) as *const T)
     }
 }

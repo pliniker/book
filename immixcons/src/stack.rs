@@ -61,6 +61,7 @@ impl SystemStackInfo {
 
     // Should be able to determine whether the stack grows up or down by comparing
     // a local arg to the address of a local arg in the caller's stack frame
+    #[inline(never)]
     fn stack_orientation(arg: &usize) -> Grows {
         // stack might grow up or down: set the base to where the stack grows from
         let some_local: usize = 1;

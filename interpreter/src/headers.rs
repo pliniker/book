@@ -2,6 +2,7 @@
 /// object, which also contains a type tag but with space for many more types.
 use immixcons::{
     AllocHeader, AllocObject, AllocRaw, AllocTypeId, ArraySize, Mark, RawPtr, SizeClass,
+    TraceVisitor,
 };
 
 use crate::array::{ArrayU16, ArrayU32, ArrayU8};
@@ -17,6 +18,7 @@ use crate::symbol::Symbol;
 use crate::taggedptr::FatPtr;
 use crate::text::Text;
 use crate::vm::{CallFrameList, Thread, Upvalue};
+use std::cell::Cell;
 
 /// Recognized heap-allocated types.
 /// This should represent every type native to the runtime with the exception of tagged pointer inline value
@@ -52,7 +54,7 @@ impl AllocTypeId for TypeList {}
 /// A heap-allocated object header
 // ANCHOR: DefObjectHeader
 pub struct ObjectHeader {
-    mark: Mark,
+    mark: Cell<Mark>,
     size_class: SizeClass,
     type_id: TypeList,
     size_bytes: u32,
@@ -66,7 +68,7 @@ impl ObjectHeader {
     // NOTE Be careful to untag the pointer before putting it into a `FatPtr`
     // ANCHOR: DefObjectHeaderGetObjectFatPtr
     pub unsafe fn get_object_fatptr(&self) -> FatPtr {
-        let ptr_to_self = self.non_null_ptr();
+        let ptr_to_self = RawPtr::new(self);
         let object_addr = HeapStorage::get_object(ptr_to_self);
 
         match self.type_id {
@@ -103,7 +105,7 @@ impl AllocHeader for ObjectHeader {
         mark: Mark,
     ) -> ObjectHeader {
         ObjectHeader {
-            mark,
+            mark: Cell::new(mark),
             size_class,
             type_id: O::TYPE_ID,
             size_bytes: size,
@@ -112,19 +114,19 @@ impl AllocHeader for ObjectHeader {
 
     fn new_array(size: ArraySize, size_class: SizeClass, mark: Mark) -> ObjectHeader {
         ObjectHeader {
-            mark,
+            mark: Cell::new(mark),
             size_class,
             type_id: TypeList::ArrayBackingBytes,
             size_bytes: size,
         }
     }
 
-    fn mark(&mut self, value: Mark) {
-        self.mark = value;
+    fn mark(&self, value: Mark) {
+        self.mark.set(value);
     }
 
     fn mark_is(&self, value: Mark) -> bool {
-        self.mark == value
+        self.mark.get() == value
     }
 
     fn size_class(&self) -> SizeClass {
@@ -137,6 +139,11 @@ impl AllocHeader for ObjectHeader {
 
     fn type_id(&self) -> TypeList {
         self.type_id
+    }
+
+    fn trace<V: TraceVisitor>(&self, v: &mut V) {
+        // TODO
+        unimplemented!()
     }
 
     const TAG_MASK: usize = TAG_MASK;
