@@ -82,7 +82,10 @@ pub type HeapStorage = ImmixConsHeap<ObjectHeader>;
 /// Heap memory types.
 // ANCHOR: DefHeap
 struct Heap {
+    // all objects will be allocated here: that is, all objects that need tracing
     heap: HeapStorage,
+    // - the conservative stack scan will ignore symbol pointers
+    // - tracing the heap will involve only tracing pointers with an object tag
     syms: SymbolMap,
 }
 // ANCHOR_END: DefHeap

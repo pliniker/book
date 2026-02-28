@@ -14,6 +14,12 @@ use crate::symbol::Symbol;
 /// mapping HashMap.
 ///
 /// No Symbol is ever deleted. Symbol name strings must be immutable.
+///
+/// Tracing:
+/// - the main heap contains all tracable objects
+/// - symbols never need tracing since they don't get deleted
+/// - pointer tags are used to skip symbol pointers automatically
+/// - therefore no tracing implementation OR proper header implementation is needed
 // ANCHOR: DefSymbolMap
 pub struct SymbolMap {
     map: RefCell<HashMap<String, RawPtr<Symbol>>>,

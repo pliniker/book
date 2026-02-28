@@ -144,6 +144,9 @@ impl AllocHeader for ObjectHeader {
     fn trace<V: TraceVisitor>(&self, v: &mut V) {
         // TODO
         unimplemented!()
+
+        // Get the object itself as a FatPtr
+        // Run trace with that
     }
 
     const TAG_MASK: usize = TAG_MASK;

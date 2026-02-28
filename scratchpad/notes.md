@@ -15,8 +15,8 @@ ImmixCons:
   - [ ] array trace
   - [ ] dict trace
 - [ ] marking objects, lines, object maps, blocks
-- [ ] sweeping
-- [ ] block management: recycling, reclaiming
+- [ ] recycle blocks
+- [ ] block management
 - [ ] back pressure on allocation, triggering gc
 - [ ] large objects
 

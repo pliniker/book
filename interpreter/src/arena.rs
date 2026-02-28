@@ -1,8 +1,6 @@
 /// A memory arena implemented as an ever growing pool of blocks.
 /// Currently implemented on top of immixcons without any gc which includes unnecessary
 /// overhead.
-use std::ptr::NonNull;
-
 use immixcons::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, ImmixConsHeap, Mark,
     RawPtr, SizeClass, TraceVisitor,

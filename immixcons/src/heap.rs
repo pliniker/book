@@ -356,6 +356,9 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     fn gc(&self) -> Result<(), GcError> {
         let blocks = unsafe { &mut *self.blocks.get() };
 
+        // TODO
+        // - reset line and block mark bits
+
         // 1. stack scan for things that could be pointers into the heap
         let mut stack_scan = Vec::new();
         self.stack.scan(&mut stack_scan, |ptr| {
@@ -391,7 +394,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
             }
         }
 
-        // 3. collect
+        // 3. recycle
         // 4. manage blocks
 
         Ok(())
