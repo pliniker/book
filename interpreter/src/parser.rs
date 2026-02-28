@@ -283,12 +283,13 @@ mod test {
     use super::*;
     use crate::memory::Memory;
     use crate::printer::print;
+    use log::debug;
 
     fn check(input: &str, expect: &str) {
         let mem = Memory::new();
         mem.enter(|mem| {
             let ast = parse(mem, input)?;
-            println!("expect: {}\ngot:    {}\ndebug:  {:?}", expect, &ast, *ast);
+            debug!("expect: {}\ngot:    {}\ndebug:  {:?}", expect, &ast, *ast);
             assert!(print(*ast) == expect);
 
             Ok(())

@@ -860,6 +860,7 @@ mod integration {
     use crate::memory::Memory;
     use crate::parser::parse;
     use crate::vm::Thread;
+    use log::debug;
 
     fn eval_helper<'guard>(
         mem: &'guard MutatorView,
@@ -867,9 +868,9 @@ mod integration {
         code: &str,
     ) -> Result<TaggedScopedPtr<'guard>, RuntimeError> {
         let compiled_code = compile(mem, parse(mem, code)?)?;
-        println!("RUN CODE {code}");
+        debug!("RUN CODE {code}");
         let result = thread.exec(mem, compiled_code)?;
-        println!("RUN RESULT {result}");
+        debug!("RUN RESULT {result}");
         Ok(result)
     }
 

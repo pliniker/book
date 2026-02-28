@@ -109,10 +109,9 @@ impl SystemStackInfo {
             // things such that values in the slice might change unexpectedly
             let potential_ptr = *stack_item;
 
-            trace!("[stack_scan] {:x}", potential_ptr);
-
             if potential_ptr != 0 && filter(potential_ptr) {
                 results.push(potential_ptr);
+                trace!("[stack_scan] {:x}", potential_ptr);
             }
         }
     }
