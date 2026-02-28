@@ -1,3 +1,12 @@
+extern crate blockalloc;
+extern crate clap;
+extern crate env_logger;
+extern crate fnv;
+extern crate immixcons;
+extern crate itertools;
+extern crate log;
+extern crate rustyline;
+
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;

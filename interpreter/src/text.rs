@@ -49,7 +49,7 @@ impl Text {
 
     unsafe fn unguarded_as_str(&self) -> &str {
         if let Some(ptr) = self.content.as_ptr() {
-            let slice = slice::from_raw_parts(ptr, self.content.capacity() as usize);
+            let slice = unsafe { slice::from_raw_parts(ptr, self.content.capacity() as usize) };
             str::from_utf8(slice).unwrap()
         } else {
             ""

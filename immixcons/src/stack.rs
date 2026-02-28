@@ -1,7 +1,7 @@
-use core::pin::{pin, Pin};
 use libc::{getcontext, pthread_attr_getstack, pthread_getattr_np, pthread_self};
 use log::trace;
 use std::mem::{size_of, MaybeUninit};
+use std::pin::{pin, Pin};
 use std::slice::from_raw_parts;
 
 /// Stack growth orientation

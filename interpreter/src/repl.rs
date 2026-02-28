@@ -5,8 +5,8 @@ use crate::parser::parse;
 use crate::safeptr::TaggedScopedPtr;
 use crate::vm::{EvalStatus, Thread};
 
-use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
 
 fn get_or_create_history(filename: &str) -> Option<String> {
     match dirs::home_dir() {
@@ -23,7 +23,7 @@ fn get_reader(history_file: &Option<String>) -> Result<DefaultEditor, ReadlineEr
     let mut reader = DefaultEditor::new()?;
 
     // Try to load the repl history file
-    if let Some(ref path) = history_file {
+    if let Some(path) = history_file {
         if let Err(err) = reader.load_history(&path) {
             eprintln!("Could not read history: {err}");
         }

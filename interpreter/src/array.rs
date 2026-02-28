@@ -20,7 +20,7 @@ use crate::error::{ErrorKind, RuntimeError};
 use crate::headers::TypeList;
 use crate::memory::MutatorView;
 use crate::printer::Print;
-use crate::rawarray::{default_array_growth, RawArray, DEFAULT_ARRAY_SIZE};
+use crate::rawarray::{DEFAULT_ARRAY_SIZE, RawArray, default_array_growth};
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::Value;
 
@@ -145,7 +145,7 @@ impl<T: Sized + Clone> Array<T> {
     /// patterns such as RefCell-style should be used in addition.
     pub unsafe fn as_slice(&self, _guard: &'_ dyn MutatorScope) -> &mut [T] {
         if let Some(ptr) = self.data.get().as_ptr() {
-            from_raw_parts_mut(ptr as *mut T, self.length.get() as usize)
+            unsafe { from_raw_parts_mut(ptr as *mut T, self.length.get() as usize) }
         } else {
             &mut []
         }
@@ -158,7 +158,7 @@ impl<T: Sized + Clone> Array<T> {
     /// patterns such as RefCell-style should be used in addition.
     pub unsafe fn as_capacity_slice(&self, _guard: &'_ dyn MutatorScope) -> &mut [T] {
         if let Some(ptr) = self.data.get().as_ptr() {
-            from_raw_parts_mut(ptr as *mut T, self.data.get().capacity() as usize)
+            unsafe { from_raw_parts_mut(ptr as *mut T, self.data.get().capacity() as usize) }
         } else {
             &mut []
         }
