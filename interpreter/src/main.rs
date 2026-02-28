@@ -17,6 +17,7 @@ mod hashable;
 mod headers;
 mod lexer;
 mod list;
+mod logging;
 mod memory;
 mod number;
 mod pair;
@@ -63,6 +64,8 @@ struct Cli {
 }
 
 fn main() {
+    logging::init();
+
     let cli = Cli::parse();
 
     if let Some(filename) = cli.filename {
