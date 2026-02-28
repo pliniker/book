@@ -38,8 +38,7 @@ Interpreter improvements:
 Conservative stack scanning.
 - allows for intrusive data structures _where used_
 - simpler mutator root management
-  - still need to use Pin to keep roots from escaping
-  - or do we? Interior mutability means roots only have to be readonly
+  - interior mutability means roots only have to be readonly &ptr
   - which means no mem::replace etc if we have a phantom lifetime
 - need to push all registers to stack
   - how is this safely done? bdwgc endorses use of getcontext() or setjmp

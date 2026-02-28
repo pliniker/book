@@ -20,7 +20,7 @@ use crate::error::{ErrorKind, RuntimeError};
 use crate::headers::TypeList;
 use crate::memory::MutatorView;
 use crate::printer::Print;
-use crate::rawarray::{DEFAULT_ARRAY_SIZE, RawArray, default_array_growth};
+use crate::rawarray::{default_array_growth, RawArray, DEFAULT_ARRAY_SIZE};
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::Value;
 
