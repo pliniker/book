@@ -1,16 +1,7 @@
 /// Miscelaneous pointer operations
-use std::ptr::NonNull;
-
 use immixcons::RawPtr;
 
 use crate::safeptr::MutatorScope;
-
-/// For conversion of a reference to a NonNull<T>
-pub trait AsNonNull {
-    fn non_null_ptr(&self) -> NonNull<Self> {
-        unsafe { NonNull::new_unchecked(self as *const Self as *mut Self) }
-    }
-}
 
 // Pointer tag values and masks using the lowest 2 bits
 // ANCHOR: TaggedPtrTags
@@ -57,3 +48,8 @@ impl<T> AsScopedRef<T> for RawPtr<T> {
     }
 }
 // ANCHOR_END: DefScopedRef
+
+/// For accessing raw pointer values
+pub trait DebugPtr {
+    fn addr(&self) -> usize;
+}

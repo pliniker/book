@@ -316,6 +316,11 @@ impl TaggedPtr {
         }
     }
     // ANCHOR_END: DefTaggedPtrIntoFatPtr
+
+    // Read the raw pointer value out
+    pub fn addr(&self) -> usize {
+        unsafe { self.tag }
+    }
 }
 
 // ANCHOR: DefFromFatPtrForTaggedPtr

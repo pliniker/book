@@ -5,7 +5,7 @@ use std::ops::Deref;
 use immixcons::{AllocObject, RawPtr};
 
 use crate::headers::TypeList;
-use crate::pointerops::AsScopedRef;
+use crate::pointerops::{AsScopedRef, DebugPtr};
 use crate::printer::Print;
 use crate::taggedptr::{FatPtr, TaggedPtr, Value};
 
@@ -38,6 +38,12 @@ impl<'guard, T: Sized> ScopedPtr<'guard, T> {
                 TaggedPtr::from(FatPtr::from(RawPtr::new(self.value))),
             )
         }
+    }
+}
+
+impl<T> DebugPtr for ScopedPtr<'_, T> {
+    fn addr(&self) -> usize {
+        0
     }
 }
 
@@ -97,6 +103,12 @@ impl<T: Sized> RefPtr<T> {
     }
 }
 
+impl<T> DebugPtr for RefPtr<T> {
+    fn addr(&self) -> usize {
+        self.inner.addr()
+    }
+}
+
 impl<T> AsScopedRef<T> for RefPtr<T> {
     fn scoped_ref<'scope>(&self, guard: &'scope dyn MutatorScope) -> &'scope T {
         self.inner.scoped_ref(guard)
@@ -137,6 +149,12 @@ impl<T: Sized> CellPtr<T> {
     // carries this lifetime already so we can assume that this operation is safe
     pub fn set(&self, source: ScopedPtr<T>) {
         self.inner.set(RawPtr::new(source.value))
+    }
+}
+
+impl<T: Sized> DebugPtr for CellPtr<T> {
+    fn addr(&self) -> usize {
+        self.inner.get().addr()
     }
 }
 
@@ -182,6 +200,12 @@ impl<'guard> TaggedScopedPtr<'guard> {
 
     pub fn value(&self) -> Value<'guard> {
         self.value
+    }
+}
+
+impl DebugPtr for TaggedScopedPtr<'_> {
+    fn addr(&self) -> usize {
+        self.ptr.addr()
     }
 }
 
@@ -293,6 +317,12 @@ impl TaggedCellPtr {
     // TODO DEPRECATE IF POSSIBLE
     pub fn get_ptr(&self, _guard: &'_ dyn MutatorScope) -> TaggedPtr {
         self.inner.get()
+    }
+}
+
+impl DebugPtr for TaggedCellPtr {
+    fn addr(&self) -> usize {
+        self.inner.get().addr()
     }
 }
 

@@ -2,9 +2,11 @@ use crate::compiler::compile;
 use crate::error::{ErrorKind, RuntimeError};
 use crate::memory::MutatorView;
 use crate::parser::parse;
+use crate::pointerops::DebugPtr;
 use crate::safeptr::TaggedScopedPtr;
 use crate::vm::{EvalStatus, Thread};
 
+use log::trace;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
@@ -42,33 +44,45 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
     };
 
     match (|mem, line| -> Result<TaggedScopedPtr, RuntimeError> {
-        let value = parse(mem, line)?;
+        let ast = parse(mem, line)?;
 
         if debug {
-            println!("# Debug\n## Input:\n```\n{line}\n```\n## Parsed:\n```\n{value:?}\n```");
+            println!("# Debug\n## Input:\n```\n{line}\n```\n## Parsed:\n```\n{ast:?}\n```");
         }
 
-        let function = compile(mem, value)?;
+        let function = compile(mem, ast)?;
 
         if debug {
             println!("## Compiled:\n```\n{function:?}\n```");
         }
 
         let mut status = thread.start_exec(mem, function)?;
-        let value = loop {
+        let result = loop {
             match status {
                 EvalStatus::Return(value) => break value,
-                _ => status = thread.continue_exec(mem, 1024)?,
+                _ => {
+                    status = {
+                        mem.gc();
+                        thread.continue_exec(mem, 1024)?
+                    }
+                }
             };
         };
 
         if debug {
-            println!("## Evaluated:\n```\n{value:?}\n```\n");
+            println!("## Evaluated:\n```\n{result:?}\n```\n");
         }
 
+        trace!(
+            "ast: {:p}={:x}, fn: {:x}, result: {:x}",
+            &ast,
+            ast.addr(),
+            function.addr(),
+            result.addr()
+        );
         mem.gc();
 
-        Ok(value)
+        Ok(result)
     })(mem, line)
     {
         Ok(value) => println!("{value}"),

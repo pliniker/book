@@ -13,7 +13,7 @@ use crate::list::List;
 use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
-use crate::pointerops::{AsNonNull, Tagged, TAG_MASK};
+use crate::pointerops::{Tagged, TAG_MASK};
 use crate::symbol::Symbol;
 use crate::taggedptr::FatPtr;
 use crate::text::Text;
@@ -94,8 +94,6 @@ impl ObjectHeader {
     // ANCHOR_END: DefObjectHeaderGetObjectFatPtr
 }
 
-impl AsNonNull for ObjectHeader {}
-
 impl AllocHeader for ObjectHeader {
     type TypeId = TypeList;
 
@@ -149,7 +147,7 @@ impl AllocHeader for ObjectHeader {
         // Run trace with that
     }
 
-    const TAG_MASK: usize = TAG_MASK;
+    const TAG_MASK: usize = !TAG_MASK;
 }
 
 /// Apply the type ID to each native type
