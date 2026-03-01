@@ -66,8 +66,7 @@ impl TraceVisitor for PreciseHeapTracer {
 // TODO:
 // free: Vec<usize>,
 // recycle: Vec<usize>
-// large: Vec<Thing> - large objects will likely be implemented by an
-//   indirection via a small object pointer
+// large: ?
 // ANCHOR: DefBlockList
 struct BlockList {
     head: Option<BumpBlock>,

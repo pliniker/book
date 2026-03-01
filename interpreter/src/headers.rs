@@ -139,12 +139,37 @@ impl AllocHeader for ObjectHeader {
         self.type_id
     }
 
-    fn trace<V: TraceVisitor>(&self, v: &mut V) {
+    #[inline(always)]
+    fn trace<V: TraceVisitor>(&self, _v: &mut V) {
         // TODO
         unimplemented!()
 
         // Get the object itself as a FatPtr
         // Run trace with that
+        //
+        // OK BUT what about Symbols?
+        //  - They're not guaranteed to be distinguishable by pointer tag
+        //  - They don't need to be traced
+        //
+        // OK BUT
+        //  - The stack scan won't pick up symbols on the stack
+        //  - Therefore anything from the stack scan should be traced
+        //
+        // OK BUT
+        //  - The heap trace will always be referring to types:
+        //    - TaggedCellPtr
+        //    - CellPtr
+        //    - RefPtr
+        // - of these, only TaggedCellPtr has the tag bit set
+        //
+        // OK BUT
+        //  - of these, only TaggedCellPtr needs to be checked because the
+        //  - type is known at compile time for CellPtr and RefPtr
+        //
+        // In summary:
+        //  - TaggedCellPtr needs a `is_tracable()` function
+        //  - this trace method or its delegates needs to avoid tracing symbols
+        //  - should be easy since there are no cases of those
     }
 
     const TAG_MASK: usize = !TAG_MASK;
