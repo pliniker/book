@@ -12,10 +12,21 @@ correctness to entire chapter content! Feel free to add yourself to the
 
 ## LLMs
 
+There is no official policy for or against LLMs _yet_.
+
+However, all code, suggestions, bugs and PRs are owned by humans. Any bug
+or PR that is detached from a human operator will be auto-rejected.
+
+The style and structure of the existing codebase must be respected. PRs that
+clearly do not understand this will be auto-rejected.
+
 Whether you use LLMs or not, you are responsible for the correctness and 
 quality of any code or documentation submission, of explaining your idea
 and why you think it's a good idea. Put in the work to understand the 
 problem and solution.
+
+Ultimately, this repository represents a vehicle for human understanding
+and is not purposed for rapid LLM agent iteration.
 
 
 ## Licensing

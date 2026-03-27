@@ -40,6 +40,7 @@ mod symbol;
 mod symbolmap;
 mod taggedptr;
 mod text;
+mod trace;
 mod vm;
 
 use crate::error::RuntimeError;

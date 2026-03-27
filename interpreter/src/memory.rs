@@ -10,6 +10,7 @@ use crate::pointerops::AsScopedRef;
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedScopedPtr};
 use crate::symbolmap::SymbolMap;
 use crate::taggedptr::{FatPtr, TaggedPtr};
+use crate::trace::{GcScope, TraceVisitorProxy};
 
 /// This type describes the mutator's view into memory - the heap and symbol name/ptr lookup.
 ///
@@ -133,7 +134,9 @@ impl Heap {
 
     /// Run a garbage collection iteration
     fn gc(&self) {
-        self.heap.gc();
+        let guard = GcScope {};
+        let mut visitor = TraceVisitorProxy::new(&guard);
+        self.heap.gc(&mut visitor);
     }
 }
 

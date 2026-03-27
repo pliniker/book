@@ -1,3 +1,4 @@
+use immixcons::TraceVisitor;
 use std::cell::Cell;
 use std::fmt;
 
@@ -6,6 +7,7 @@ use crate::memory::MutatorView;
 use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::Value;
+use crate::trace::Trace;
 
 /// A Pair of pointers, like a Cons cell of old
 // ANCHOR: DefPair
@@ -210,6 +212,13 @@ pub fn values_from_3_pairs<'guard>(
             "Pair list has {} items, expected 3",
             result.len()
         ))),
+    }
+}
+
+impl Trace for Pair {
+    fn trace<V: TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.first.trace(v, guard);
+        self.second.trace(v, guard);
     }
 }
 

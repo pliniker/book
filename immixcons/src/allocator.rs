@@ -44,7 +44,7 @@ pub trait AllocRaw {
     fn get_object(header: RawPtr<Self::Header>) -> RawPtr<()>;
 
     /// Run a garbage collection iteration
-    fn gc(&self) -> Result<(), GcError>;
+    fn gc<V: TraceVisitor>(&self, v: &mut V) -> Result<(), GcError>;
 }
 // ANCHOR_END: DefAllocRaw
 
@@ -98,8 +98,6 @@ pub trait AllocObject<T: AllocTypeId> {
 
 /// An object header struct must provide an implementation of this trait,
 /// providing appropriate information to the garbage collector.
-// TODO tracing information
-// e.g. fn tracer(&self) -> Fn()
 // ANCHOR: DefAllocHeader
 pub trait AllocHeader: Sized {
     /// Associated type that identifies the allocated object type
@@ -131,9 +129,6 @@ pub trait AllocHeader: Sized {
         size_of::<Self>() + (constants::ALLOC_ALIGN_BYTES - 1) & !(constants::ALLOC_ALIGN_BYTES - 1)
     }
 
-    /// Trace into this object using an instance of TraceVisitor
-    fn trace<V: TraceVisitor>(&self, v: &mut V);
-
     /// This constant needs to be set to be able to mask out tagged pointer tag bits
     const TAG_MASK: usize = !0x0;
 }
@@ -142,4 +137,5 @@ pub trait AllocHeader: Sized {
 /// Counterpart interface for traversing a heap
 pub trait TraceVisitor {
     fn visit(&mut self, object: RawPtr<()>);
+    fn pop(&mut self) -> Option<RawPtr<()>>;
 }

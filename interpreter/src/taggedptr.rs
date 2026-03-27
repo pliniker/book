@@ -244,10 +244,15 @@ impl TaggedPtr {
         unsafe { self.tag == 0 }
     }
 
-    /// Test if the pointer is to an object.
-    /// This is useful for checking if the pointer should be traced
-    pub fn is_object(&self) -> bool {
-        unsafe { self.tag == TAG_OBJECT }
+    /// Test if the pointer is a type that needs tracing/marking.
+    pub fn traceable_ptr(&self) -> Option<RawPtr<()>> {
+        unsafe {
+            if self.tag == TAG_OBJECT || self.tag == TAG_PAIR {
+                Some(RawPtr::untag(self.object))
+            } else {
+                None
+            }
+        }
     }
 
     /// Construct a generic object TaggedPtr

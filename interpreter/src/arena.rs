@@ -45,10 +45,6 @@ impl AllocHeader for ArenaHeader {
     fn type_id(&self) -> TypeList {
         TypeList::Symbol
     }
-
-    fn trace<V: TraceVisitor>(&self, _object: &mut V) {
-        unimplemented!()
-    }
 }
 
 /// A non-garbage-collected pool of memory blocks for interned values.
@@ -93,7 +89,7 @@ impl AllocRaw for Arena {
         unimplemented!()
     }
 
-    fn gc(&self) -> Result<(), GcError> {
+    fn gc<V: TraceVisitor>(&self, _v: &mut V) -> Result<(), GcError> {
         unimplemented!()
     }
 }

@@ -39,25 +39,25 @@ impl AllocDest {
 }
 
 /// Structure for collecting pointers across the heap during tracing
-struct PreciseHeapTracer {
+pub struct HeapTracer {
     visited: Vec<RawPtr<()>>,
 }
 
-impl PreciseHeapTracer {
-    fn new() -> PreciseHeapTracer {
-        PreciseHeapTracer {
+impl HeapTracer {
+    pub fn new() -> HeapTracer {
+        HeapTracer {
             visited: Vec::new(),
         }
+    }
+}
+
+impl TraceVisitor for HeapTracer {
+    fn visit(&mut self, object: RawPtr<()>) {
+        self.visited.push(object);
     }
 
     fn pop(&mut self) -> Option<RawPtr<()>> {
         self.visited.pop()
-    }
-}
-
-impl TraceVisitor for PreciseHeapTracer {
-    fn visit(&mut self, object: RawPtr<()>) {
-        self.visited.push(object);
     }
 }
 
@@ -352,7 +352,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     // ANCHOR_END: DefGetObject
 
     /// Run a garbage collection iteration
-    fn gc(&self) -> Result<(), GcError> {
+    fn gc<V: TraceVisitor>(&self, tracer: &mut V) -> Result<(), GcError> {
         let blocks = unsafe { &mut *self.blocks.get() };
 
         // TODO
@@ -365,7 +365,6 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         });
 
         // 2. trace
-        let mut tracer = PreciseHeapTracer::new();
 
         // 2.1 trace the stack scan
         for ptr in stack_scan.iter() {
@@ -376,7 +375,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
                     continue;
                 }
                 header.mark(Mark::Marked);
-                header.trace(&mut tracer);
+                tracer.visit(RawPtr::new(*ptr as *const ()));
             };
         }
 
@@ -389,7 +388,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
                     continue;
                 }
                 header.mark(Mark::Marked);
-                header.trace(&mut tracer);
+                tracer.visit(object);
             }
         }
 

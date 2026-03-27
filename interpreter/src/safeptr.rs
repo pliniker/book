@@ -2,12 +2,13 @@ use std::cell::Cell;
 use std::fmt;
 use std::ops::Deref;
 
-use immixcons::{AllocObject, RawPtr};
+use immixcons::{AllocObject, RawPtr, TraceVisitor};
 
 use crate::headers::TypeList;
 use crate::pointerops::{AsScopedRef, DebugPtr};
 use crate::printer::Print;
 use crate::taggedptr::{FatPtr, TaggedPtr, Value};
+use crate::trace::Trace;
 
 /// Type that provides a generic anchor for mutator timeslice lifetimes
 // ANCHOR: DefMutatorScope
@@ -121,6 +122,12 @@ impl<T> AsScopedPtr<T> for RefPtr<T> {
     }
 }
 
+impl<T> Trace for RefPtr<T> {
+    fn trace<V: TraceVisitor>(&self, v: &mut V, _guard: &'_ dyn MutatorScope) {
+        v.visit(self.inner.as_untyped())
+    }
+}
+
 /// A wrapper around untagged raw pointers for storing compile-time typed pointers in data
 /// structures with interior mutability, allowing pointers to be updated to point at different
 /// target objects.
@@ -161,6 +168,12 @@ impl<T: Sized> DebugPtr for CellPtr<T> {
 impl<T: Sized> From<ScopedPtr<'_, T>> for CellPtr<T> {
     fn from(ptr: ScopedPtr<T>) -> CellPtr<T> {
         CellPtr::new_with(ptr)
+    }
+}
+
+impl<T> Trace for CellPtr<T> {
+    fn trace<V: TraceVisitor>(&self, v: &mut V, _guard: &'_ dyn MutatorScope) {
+        v.visit(self.inner.get().as_untyped())
     }
 }
 
@@ -329,5 +342,13 @@ impl DebugPtr for TaggedCellPtr {
 impl From<TaggedScopedPtr<'_>> for TaggedCellPtr {
     fn from(ptr: TaggedScopedPtr) -> TaggedCellPtr {
         TaggedCellPtr::new_with(ptr)
+    }
+}
+
+impl Trace for TaggedCellPtr {
+    fn trace<V: TraceVisitor>(&self, v: &mut V, _guard: &'_ dyn MutatorScope) {
+        if let Some(ptr) = self.inner.get().traceable_ptr() {
+            v.visit(ptr);
+        }
     }
 }

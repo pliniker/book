@@ -14,8 +14,9 @@ use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
 use crate::pointerops::{Tagged, TAG_MASK};
+use crate::safeptr::MutatorScope;
 use crate::symbol::Symbol;
-use crate::taggedptr::FatPtr;
+use crate::taggedptr::{FatPtr, Value};
 use crate::text::Text;
 use crate::vm::{CallFrameList, Thread, Upvalue};
 use std::cell::Cell;
@@ -86,6 +87,7 @@ impl ObjectHeader {
             TypeList::Symbol => FatPtr::Symbol(RawPtr::untag(object_addr.cast::<Symbol>())),
             TypeList::Text => FatPtr::Text(RawPtr::untag(object_addr.cast::<Text>())),
             TypeList::Upvalue => FatPtr::Upvalue(RawPtr::untag(object_addr.cast::<Upvalue>())),
+            //TypeList::InstructionStream => { FatPtr::InstructionStream(RawPtr::untag(object_addr.cast::<InstructionStream>())) }
 
             // Other types not represented by FatPtr are an error to id here
             _ => panic!("Invalid ObjectHeader type tag {:?}!", self.type_id),
@@ -137,39 +139,6 @@ impl AllocHeader for ObjectHeader {
 
     fn type_id(&self) -> TypeList {
         self.type_id
-    }
-
-    #[inline(always)]
-    fn trace<V: TraceVisitor>(&self, _v: &mut V) {
-        // TODO
-        unimplemented!()
-
-        // Get the object itself as a FatPtr
-        // Run trace with that
-        //
-        // OK BUT what about Symbols?
-        //  - They're not guaranteed to be distinguishable by pointer tag
-        //  - They don't need to be traced
-        //
-        // OK BUT
-        //  - The stack scan won't pick up symbols on the stack
-        //  - Therefore anything from the stack scan should be traced
-        //
-        // OK BUT
-        //  - The heap trace will always be referring to types:
-        //    - TaggedCellPtr
-        //    - CellPtr
-        //    - RefPtr
-        // - of these, only TaggedCellPtr has the tag bit set
-        //
-        // OK BUT
-        //  - of these, only TaggedCellPtr needs to be checked because the
-        //  - type is known at compile time for CellPtr and RefPtr
-        //
-        // In summary:
-        //  - TaggedCellPtr needs a `is_tracable()` function
-        //  - this trace method or its delegates needs to avoid tracing symbols
-        //  - should be easy since there are no cases of those
     }
 
     const TAG_MASK: usize = !TAG_MASK;
