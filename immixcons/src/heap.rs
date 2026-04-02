@@ -1,3 +1,4 @@
+use log::trace;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -53,6 +54,7 @@ impl HeapTracer {
 
 impl TraceVisitor for HeapTracer {
     fn visit(&mut self, object: RawPtr<()>) {
+        trace!("[heap_scan] {:x}", object.addr());
         self.visited.push(object);
     }
 

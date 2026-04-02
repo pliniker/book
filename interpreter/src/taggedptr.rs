@@ -16,6 +16,7 @@ use std::fmt;
 use immixcons::{AllocRaw, RawPtr};
 
 use crate::array::{ArrayU16, ArrayU32, ArrayU8};
+use crate::bytecode::InstructionStream;
 use crate::dict::Dict;
 use crate::function::{Function, Partial};
 use crate::list::List;
@@ -29,7 +30,7 @@ use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr};
 use crate::symbol::Symbol;
 use crate::text::Text;
-use crate::vm::Upvalue;
+use crate::vm::{CallFrameList, Thread, Upvalue};
 
 /// A safe interface to GC-heap managed objects. The `'guard` lifetime must be a safe lifetime for
 /// the GC not to move or collect the referenced object.
@@ -40,8 +41,10 @@ pub enum Value<'guard> {
     ArrayU8(ScopedPtr<'guard, ArrayU8>),
     ArrayU16(ScopedPtr<'guard, ArrayU16>),
     ArrayU32(ScopedPtr<'guard, ArrayU32>),
+    CallFrameList(ScopedPtr<'guard, CallFrameList>),
     Dict(ScopedPtr<'guard, Dict>),
     Function(ScopedPtr<'guard, Function>),
+    InstructionStream(ScopedPtr<'guard, InstructionStream>),
     List(ScopedPtr<'guard, List>),
     Nil,
     Number(isize),
@@ -50,6 +53,7 @@ pub enum Value<'guard> {
     Partial(ScopedPtr<'guard, Partial>),
     Symbol(ScopedPtr<'guard, Symbol>),
     Text(ScopedPtr<'guard, Text>),
+    Thread(ScopedPtr<'guard, Thread>),
     Upvalue(ScopedPtr<'guard, Upvalue>),
 }
 // ANCHOR_END: DefValue
@@ -107,8 +111,10 @@ pub enum FatPtr {
     ArrayU8(RawPtr<ArrayU8>),
     ArrayU16(RawPtr<ArrayU16>),
     ArrayU32(RawPtr<ArrayU32>),
+    CallFrameList(RawPtr<CallFrameList>),
     Dict(RawPtr<Dict>),
     Function(RawPtr<Function>),
+    InstructionStream(RawPtr<InstructionStream>),
     List(RawPtr<List>),
     Nil,
     Number(isize),
@@ -117,6 +123,7 @@ pub enum FatPtr {
     Partial(RawPtr<Partial>),
     Symbol(RawPtr<Symbol>),
     Text(RawPtr<Text>),
+    Thread(RawPtr<Thread>),
     Upvalue(RawPtr<Upvalue>),
 }
 // ANCHOR_END: DefFatPtr
@@ -127,36 +134,29 @@ impl FatPtr {
     // ANCHOR: DefFatPtrAsValue
     pub fn as_value<'guard>(&self, guard: &'guard dyn MutatorScope) -> Value<'guard> {
         match self {
-            FatPtr::ArrayU8(raw_ptr) => {
-                Value::ArrayU8(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            FatPtr::ArrayU8(raw) => Value::ArrayU8(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::ArrayU16(raw) => Value::ArrayU16(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::ArrayU32(raw) => Value::ArrayU32(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::CallFrameList(raw) => {
+                Value::CallFrameList(ScopedPtr::new(guard, raw.scoped_ref(guard)))
             }
-            FatPtr::ArrayU16(raw_ptr) => {
-                Value::ArrayU16(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            FatPtr::Dict(raw) => Value::Dict(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::Function(raw) => Value::Function(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::InstructionStream(raw) => {
+                Value::InstructionStream(ScopedPtr::new(guard, raw.scoped_ref(guard)))
             }
-            FatPtr::ArrayU32(raw_ptr) => {
-                Value::ArrayU32(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
-            }
-            FatPtr::Dict(raw_ptr) => Value::Dict(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
-            FatPtr::Function(raw_ptr) => {
-                Value::Function(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
-            }
-            FatPtr::List(raw_ptr) => Value::List(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
+            FatPtr::List(raw) => Value::List(ScopedPtr::new(guard, raw.scoped_ref(guard))),
             FatPtr::Nil => Value::Nil,
             FatPtr::Number(num) => Value::Number(*num),
-            FatPtr::NumberObject(raw_ptr) => {
-                Value::NumberObject(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
+            FatPtr::NumberObject(raw) => {
+                Value::NumberObject(ScopedPtr::new(guard, raw.scoped_ref(guard)))
             }
-            FatPtr::Pair(raw_ptr) => Value::Pair(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
-            FatPtr::Partial(raw_ptr) => {
-                Value::Partial(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
-            }
-            FatPtr::Symbol(raw_ptr) => {
-                Value::Symbol(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
-            }
-            FatPtr::Text(raw_ptr) => Value::Text(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard))),
-            FatPtr::Upvalue(raw_ptr) => {
-                Value::Upvalue(ScopedPtr::new(guard, raw_ptr.scoped_ref(guard)))
-            }
+            FatPtr::Pair(raw) => Value::Pair(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::Partial(raw) => Value::Partial(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::Symbol(raw) => Value::Symbol(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::Text(raw) => Value::Text(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::Thread(raw) => Value::Thread(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::Upvalue(raw) => Value::Upvalue(ScopedPtr::new(guard, raw.scoped_ref(guard))),
         }
     }
     // ANCHOR_END: DefFatPtrAsValue
@@ -335,8 +335,10 @@ impl From<FatPtr> for TaggedPtr {
             FatPtr::ArrayU8(raw) => TaggedPtr::object(raw),
             FatPtr::ArrayU16(raw) => TaggedPtr::object(raw),
             FatPtr::ArrayU32(raw) => TaggedPtr::object(raw),
+            FatPtr::CallFrameList(raw) => TaggedPtr::object(raw),
             FatPtr::Dict(raw) => TaggedPtr::object(raw),
             FatPtr::Function(raw) => TaggedPtr::object(raw),
+            FatPtr::InstructionStream(raw) => TaggedPtr::object(raw),
             FatPtr::List(raw) => TaggedPtr::object(raw),
             FatPtr::Nil => TaggedPtr::nil(),
             FatPtr::Number(value) => TaggedPtr::number(value),
@@ -344,6 +346,7 @@ impl From<FatPtr> for TaggedPtr {
             FatPtr::Pair(raw) => TaggedPtr::pair(raw),
             FatPtr::Partial(raw) => TaggedPtr::object(raw),
             FatPtr::Text(raw) => TaggedPtr::object(raw),
+            FatPtr::Thread(raw) => TaggedPtr::object(raw),
             FatPtr::Symbol(raw) => TaggedPtr::symbol(raw),
             FatPtr::Upvalue(raw) => TaggedPtr::object(raw),
         }

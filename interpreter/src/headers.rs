@@ -73,11 +73,20 @@ impl ObjectHeader {
         let object_addr = HeapStorage::get_object(ptr_to_self);
 
         match self.type_id {
+            // Special case ArrayBackingBytes isn't directly converted because its a base
+            // type for other type implementations
+            TypeList::ArrayBackingBytes => FatPtr::Nil,
             TypeList::ArrayU8 => FatPtr::ArrayU8(RawPtr::untag(object_addr.cast::<ArrayU8>())),
             TypeList::ArrayU16 => FatPtr::ArrayU16(RawPtr::untag(object_addr.cast::<ArrayU16>())),
             TypeList::ArrayU32 => FatPtr::ArrayU32(RawPtr::untag(object_addr.cast::<ArrayU32>())),
+            TypeList::CallFrameList => {
+                FatPtr::CallFrameList(RawPtr::untag(object_addr.cast::<CallFrameList>()))
+            }
             TypeList::Dict => FatPtr::Dict(RawPtr::untag(object_addr.cast::<Dict>())),
             TypeList::Function => FatPtr::Function(RawPtr::untag(object_addr.cast::<Function>())),
+            TypeList::InstructionStream => {
+                FatPtr::InstructionStream(RawPtr::untag(object_addr.cast::<InstructionStream>()))
+            }
             TypeList::List => FatPtr::List(RawPtr::untag(object_addr.cast::<List>())),
             TypeList::NumberObject => {
                 FatPtr::NumberObject(RawPtr::untag(object_addr.cast::<NumberObject>()))
@@ -87,7 +96,7 @@ impl ObjectHeader {
             TypeList::Symbol => FatPtr::Symbol(RawPtr::untag(object_addr.cast::<Symbol>())),
             TypeList::Text => FatPtr::Text(RawPtr::untag(object_addr.cast::<Text>())),
             TypeList::Upvalue => FatPtr::Upvalue(RawPtr::untag(object_addr.cast::<Upvalue>())),
-            //TypeList::InstructionStream => { FatPtr::InstructionStream(RawPtr::untag(object_addr.cast::<InstructionStream>())) }
+            TypeList::Thread => FatPtr::Thread(RawPtr::untag(object_addr.cast::<Thread>())),
 
             // Other types not represented by FatPtr are an error to id here
             _ => panic!("Invalid ObjectHeader type tag {:?}!", self.type_id),
