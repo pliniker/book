@@ -62,7 +62,7 @@ fn interpret_line(mem: &MutatorView, thread: &Thread, line: String) -> Result<()
                 EvalStatus::Return(value) => break value,
                 _ => {
                     status = {
-                        mem.gc();
+                        //mem.gc();
                         thread.continue_exec(mem, 1024)?
                     }
                 }

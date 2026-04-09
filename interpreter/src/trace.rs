@@ -2,6 +2,7 @@ use crate::safeptr::MutatorScope;
 use crate::taggedptr::Value;
 use crate::{headers::TypeList, memory::HeapStorage};
 use immixcons::{AllocObject, AllocRaw, HeapTracer, RawPtr, TraceVisitor};
+use log::trace;
 
 /// This empty struct will provide scope guarded access to Trace::trace()
 /// so that safe access can be assured.
@@ -31,6 +32,7 @@ impl<'guard> TraceVisitorProxy<'guard> {
 
 impl<'guard> TraceVisitor for TraceVisitorProxy<'guard> {
     fn visit(&mut self, object: RawPtr<()>) {
+        trace!("[trace_visit] {:x}", object.addr());
         let header = HeapStorage::get_header(object);
         let object = unsafe { header.as_ref().get_object_fatptr() };
         let value = object.as_value(self.guard);

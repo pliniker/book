@@ -144,16 +144,17 @@ impl BlockList {
     /// 2. Masking the pointer to get a potential block offset, check that the
     ///    offset is marked in the block's object map
     #[inline(always)]
-    fn is_conservatively_a_ptr(&self, ptr: usize) -> bool {
+    fn is_conservatively_a_ptr(&self, ptr: usize) -> Option<usize> {
         let block_base = ptr & constants::BLOCK_PTR_MASK;
 
         if let Some(ref block) = self.rest.get(&block_base) {
             let block_offset = ptr & !constants::BLOCK_PTR_MASK;
             let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
-            block_offset < constants::ALLOC_UPPER_EXTENT && meta.is_object_marked(block_offset)
-        } else {
-            false
+            if block_offset < constants::ALLOC_UPPER_EXTENT && meta.is_object_marked(block_offset) {
+                return Some(ptr);
+            }
         }
+        None
     }
 }
 
@@ -473,23 +474,6 @@ mod tests {
         fn type_id(&self) -> TestTypeId {
             self.type_id
         }
-
-        fn trace<V: TraceVisitor>(&self, v: &mut V) {
-            if self.type_id() == TestTypeId::List {
-                unsafe {
-                    let list = self.to_list();
-                    list.as_ref().trace(v);
-                }
-            }
-        }
-    }
-
-    impl TestHeader {
-        unsafe fn to_list(&self) -> RawPtr<List> {
-            let this: *const u8 = self as *const TestHeader as *const u8;
-            let that = this.add(Self::header_size());
-            RawPtr::new(that as *const List)
-        }
     }
 
     struct Big {
@@ -680,7 +664,8 @@ mod tests {
             assert!(unsafe { header.as_ref().mark_is(Mark::Allocated) });
         }
 
-        mem.gc();
+        let mut tracer = HeapTracer::new();
+        mem.gc(&mut tracer);
 
         // now they should be marked
         for ptr in obs {
@@ -699,7 +684,8 @@ mod tests {
             head = mem.alloc(List::new(i, head)).unwrap();
         }
 
-        mem.gc();
+        let mut tracer = HeapTracer::new();
+        mem.gc(&mut tracer);
 
         // such unsafe!
         unsafe {

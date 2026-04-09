@@ -74,7 +74,7 @@ impl SystemStackInfo {
 
     pub fn scan<F>(&self, results: &mut Vec<usize>, filter: F)
     where
-        F: Fn(usize) -> bool,
+        F: Fn(usize) -> Option<usize>,
     {
         // call getcontext to put all register values on to the stack
         let mut context = MaybeUninit::zeroed();
@@ -109,9 +109,11 @@ impl SystemStackInfo {
             // things such that values in the slice might change unexpectedly
             let potential_ptr = *stack_item;
 
-            if potential_ptr != 0 && filter(potential_ptr) {
-                results.push(potential_ptr);
-                trace!("[stack_scan] {:x}", potential_ptr);
+            if potential_ptr != 0 {
+                if let Some(potential_ptr) = filter(potential_ptr) {
+                    results.push(potential_ptr);
+                    trace!("[stack_scan] {:x}", potential_ptr);
+                }
             }
         }
     }
@@ -136,7 +138,7 @@ mod tests {
         let local: usize = 0xdeadbeef;
 
         // simply shouldn't cause any segfaults, bounds errors etc
-        stack.scan(&mut stack_scan, |_| true);
+        stack.scan(&mut stack_scan, |p| Some(p));
 
         assert!(stack_scan.contains(&local));
     }

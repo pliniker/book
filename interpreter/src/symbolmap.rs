@@ -1,8 +1,8 @@
+use immixcons::{AllocRaw, RawPtr};
+use log::trace;
 /// Implements str interning for mapping Symbol names to unique pointers
 use std::cell::RefCell;
 use std::collections::HashMap;
-
-use immixcons::{AllocRaw, RawPtr};
 
 use crate::arena::Arena;
 use crate::symbol::Symbol;
@@ -49,6 +49,7 @@ impl SymbolMap {
         let name = String::from(name);
         let ptr = self.arena.alloc(Symbol::new(&name)).unwrap();
         self.map.borrow_mut().insert(name, ptr);
+        trace!("[lookup] {:x}", ptr.addr());
         ptr
     }
     // ANCHOR_END: DefSymbolMapLookup
