@@ -414,6 +414,7 @@ mod tests {
     use super::*;
     use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
     use std::cell::Cell;
+    use std::collections::btree_set::Union;
     use std::slice::from_raw_parts;
 
     struct TestHeader {
@@ -526,6 +527,44 @@ mod tests {
 
     impl AllocObject<TestTypeId> for usize {
         const TYPE_ID: TestTypeId = TestTypeId::Usizeish;
+    }
+
+    struct TraceProxy {
+        tracer: HeapTracer,
+    }
+
+    impl TraceProxy {
+        fn new() -> TraceProxy {
+            TraceProxy {
+                tracer: HeapTracer::new(),
+            }
+        }
+    }
+
+    impl TraceVisitor for TraceProxy {
+        fn visit(&mut self, object: RawPtr<()>) {
+            let header = ImmixConsHeap::<TestHeader>::get_header(object);
+            let header = unsafe { header.as_ref() };
+
+            // Every type that is traced must be implemented here
+            match header.type_id {
+                TestTypeId::Array => unimplemented!(),
+                TestTypeId::Biggish => unimplemented!(),
+                TestTypeId::List => {
+                    let list = object.cast::<List>();
+                    if let Some(next) = unsafe { list.as_ref().next } {
+                        self.tracer.visit(next.as_untyped());
+                    }
+                }
+                TestTypeId::Stringish => unimplemented!(),
+                TestTypeId::Usizeish => unimplemented!(),
+            }
+            self.tracer.visit(object);
+        }
+
+        fn pop(&mut self) -> Option<RawPtr<()>> {
+            self.tracer.pop()
+        }
     }
 
     #[test]
@@ -684,7 +723,7 @@ mod tests {
             head = mem.alloc(List::new(i, head)).unwrap();
         }
 
-        let mut tracer = HeapTracer::new();
+        let mut tracer = TraceProxy::new();
         mem.gc(&mut tracer);
 
         // such unsafe!

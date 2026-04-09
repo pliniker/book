@@ -47,7 +47,7 @@ impl<'guard> TraceVisitor for TraceVisitorProxy<'guard> {
             //Value::Function(n) => n.trace(self, f),
             //Value::Partial(p) => p.trace(self, f),
             //Value::Upvalue(_) => write!(f, "Upvalue"),
-            _ => (),
+            _ => unimplemented!(),
         }
     }
 
