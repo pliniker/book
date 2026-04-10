@@ -2,6 +2,6 @@
 name = "blockalloc"
 version = "0.1.0"
 authors = ["Peter Liniker <peter.liniker@gmail.com>"]
-#edition = "2024"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
