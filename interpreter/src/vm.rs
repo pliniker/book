@@ -7,7 +7,7 @@ use crate::containers::{
     SliceableContainer, StackAnyContainer, StackContainer,
 };
 use crate::dict::Dict;
-use crate::error::{err_eval, RuntimeError};
+use crate::error::{RuntimeError, err_eval};
 use crate::function::{Function, Partial};
 use crate::list::List;
 use crate::memory::MutatorView;
@@ -441,7 +441,7 @@ impl Thread {
                             Err(_) => {
                                 return Err(err_eval(&format!(
                                     "Symbol {name_val} is not bound to a value"
-                                )))
+                                )));
                             }
                         }
                     } else {

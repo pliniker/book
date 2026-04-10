@@ -2,7 +2,7 @@
 ///
 /// This isn't using any look-ahead yet and so always interprets
 /// (.symbol) as ( DOT SYMBOL )
-use crate::error::{err_lexer, spos, RuntimeError, SourcePos};
+use crate::error::{RuntimeError, SourcePos, err_lexer, spos};
 
 // key characters
 const OPEN_PAREN: char = '(';

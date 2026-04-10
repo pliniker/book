@@ -95,7 +95,7 @@ impl Drop for Block {
 
 mod internal {
     use super::{BlockError, BlockPtr, BlockSize};
-    use std::alloc::{alloc, dealloc, Layout};
+    use std::alloc::{Layout, alloc, dealloc};
     use std::ptr::NonNull;
 
     // ANCHOR: AllocBlock

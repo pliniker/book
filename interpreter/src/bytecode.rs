@@ -6,7 +6,7 @@ use crate::array::{Array, ArraySize};
 use crate::containers::{
     Container, IndexedContainer, SliceableContainer, StackAnyContainer, StackContainer,
 };
-use crate::error::{err_eval, RuntimeError};
+use crate::error::{RuntimeError, err_eval};
 use crate::list::List;
 use crate::memory::MutatorView;
 use crate::printer::Print;
@@ -204,7 +204,7 @@ impl ByteCode {
             _ => {
                 return Err(err_eval(
                     "Cannot modify jump offset for non-jump instruction",
-                ))
+                ));
             }
         };
         self.code.set(mem, instruction, new_code)?;
