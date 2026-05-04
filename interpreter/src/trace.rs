@@ -1,7 +1,8 @@
+use crate::memory::HeapStorage;
 use crate::safeptr::MutatorScope;
 use crate::taggedptr::Value;
-use crate::{headers::TypeList, memory::HeapStorage};
-use immixcons::{AllocObject, AllocRaw, HeapTracer, RawPtr, TraceVisitor};
+pub use immixcons::TraceVisitor;
+use immixcons::{AllocRaw, HeapTracer, RawPtr};
 use log::trace;
 
 /// This empty struct will provide scope guarded access to Trace::trace()
@@ -32,22 +33,32 @@ impl<'guard> TraceVisitorProxy<'guard> {
 
 impl<'guard> TraceVisitor for TraceVisitorProxy<'guard> {
     fn visit(&mut self, object: RawPtr<()>) {
-        trace!("[trace_visit] {:x}", object.addr());
         let header = HeapStorage::get_header(object);
-        let object = unsafe { header.as_ref().get_object_fatptr() };
-        let value = object.as_value(self.guard);
+        let typed_object = unsafe { header.as_ref().get_object_fatptr() };
+        let value = typed_object.as_value(self.guard);
+
+        trace!("[trace_visit] {:x} {:?}", object.addr(), value);
+
         match value {
+            Value::ArrayOpcode(a) => a.trace(&mut self.tracer, self.guard),
+            Value::ArrayU8(a) => a.trace(&mut self.tracer, self.guard),
+            Value::ArrayU16(a) => a.trace(&mut self.tracer, self.guard),
+            Value::ArrayU32(a) => a.trace(&mut self.tracer, self.guard),
+            Value::ByteCode(a) => a.trace(&mut self.tracer, self.guard),
+            Value::CallFrameList(a) => a.trace(&mut self.tracer, self.guard),
+            Value::Dict(d) => d.trace(&mut self.tracer, self.guard),
+            Value::Function(f) => f.trace(&mut self.tracer, self.guard),
+            Value::InstructionStream(i) => i.trace(&mut self.tracer, self.guard),
+            Value::List(a) => a.trace(&mut self.tracer, self.guard),
+            Value::Nil => (),
+            Value::Number(_) => (),
+            Value::NumberObject(_) => panic!("no number objects"),
             Value::Pair(p) => p.trace(&mut self.tracer, self.guard),
-            //Value::Text(t) => t.trace(&mut self.tracer, self.guard),
-            //Value::List(a) => a.trace(self, f),
-            //Value::ArrayU8(a) => a.trace(self, f),
-            //Value::ArrayU16(a) => a.trace(self, f),
-            //Value::ArrayU32(a) => a.trace(self, f),
-            //Value::Dict(d) => d.trace(self, f),
-            //Value::Function(n) => n.trace(self, f),
-            //Value::Partial(p) => p.trace(self, f),
-            //Value::Upvalue(_) => write!(f, "Upvalue"),
-            _ => unimplemented!(),
+            Value::Symbol(_) => panic!("should never be tracing symbols!"),
+            Value::Thread(t) => t.trace(&mut self.tracer, self.guard),
+            Value::Partial(p) => p.trace(&mut self.tracer, self.guard),
+            Value::Text(_) => panic!("no text"),
+            Value::Upvalue(v) => v.trace(&mut self.tracer, self.guard),
         }
     }
 

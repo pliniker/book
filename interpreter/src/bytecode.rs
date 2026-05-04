@@ -12,6 +12,7 @@ use crate::memory::MutatorView;
 use crate::printer::Print;
 use crate::safeptr::{CellPtr, MutatorScope, ScopedPtr, TaggedScopedPtr};
 use crate::taggedptr::TaggedPtr;
+use crate::trace::Trace;
 
 /// A register can be in the range 0..255
 // ANCHOR: DefRegister
@@ -158,6 +159,12 @@ pub enum Opcode {
 pub type ArrayOpcode = Array<Opcode>;
 // ANCHOR_END: DefArrayOpcode
 
+impl Trace for ArrayOpcode {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.inner_trace(v, guard);
+    }
+}
+
 /// Literals are stored in a separate list of machine-word-width pointers.
 /// This is also not the most efficient scheme but it is easy to work with.
 // ANCHOR: DefLiterals
@@ -257,6 +264,13 @@ impl Print for ByteCode {
     }
 }
 
+impl Trace for ByteCode {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.code.trace(v, guard);
+        self.literals.trace(v, guard);
+    }
+}
+
 /// An InstructionStream is a pointer to a ByteCode instance and an instruction pointer giving the
 /// current index into the ByteCode
 // ANCHOR: DefInstructionStream
@@ -324,6 +338,12 @@ impl InstructionStream {
         let mut ip = self.ip.get() as i32;
         ip += offset as i32;
         self.ip.set(ip as ArraySize);
+    }
+}
+
+impl Trace for InstructionStream {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.instructions.trace(v, guard);
     }
 }
 

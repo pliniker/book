@@ -1,11 +1,12 @@
 use std::mem::size_of;
-use std::ptr::NonNull;
 use std::slice::from_raw_parts_mut;
 
-pub use immixcons::ArraySize;
+pub use crate::immixcons::ArraySize;
+use crate::immixcons::RawPtr;
 
 use crate::error::{ErrorKind, RuntimeError};
 use crate::memory::MutatorView;
+use crate::trace::Trace;
 
 /// Arrays start out at this size by default
 pub const DEFAULT_ARRAY_SIZE: ArraySize = 8;
@@ -27,7 +28,7 @@ pub fn default_array_growth(capacity: ArraySize) -> Result<ArraySize, RuntimeErr
 pub struct RawArray<T: Sized> {
     /// Count of T-sized objects that can fit in the array
     capacity: ArraySize,
-    ptr: Option<NonNull<T>>,
+    ptr: Option<RawPtr<T>>,
 }
 // ANCHOR_END: DefRawArray
 
@@ -61,7 +62,7 @@ impl<T: Sized> RawArray<T> {
 
         Ok(RawArray {
             capacity,
-            ptr: NonNull::new(mem.alloc_array(capacity_bytes)?.as_ptr() as *mut T),
+            ptr: Some(mem.alloc_array(capacity_bytes)?.cast::<T>()),
         })
     }
     // ANCHOR_END: DefRawArrayWithCapacity
@@ -91,13 +92,16 @@ impl<T: Sized> RawArray<T> {
                     .checked_mul(size_of::<T>() as ArraySize)
                     .ok_or(RuntimeError::new(ErrorKind::BadAllocationRequest))?;
 
-                let new_ptr = mem.alloc_array(new_capacity_bytes)?.as_ptr() as *mut T;
+                let new_ptr = mem.alloc_array(new_capacity_bytes)?.cast::<T>();
 
                 // create a pair of slices from the raw pointers and byte sizes
                 let (old_slice, new_slice) = unsafe {
                     (
                         from_raw_parts_mut(old_ptr as *mut u8, old_capacity_bytes as usize),
-                        from_raw_parts_mut(new_ptr as *mut u8, new_capacity_bytes as usize),
+                        from_raw_parts_mut(
+                            new_ptr.as_ptr() as *mut u8,
+                            new_capacity_bytes as usize,
+                        ),
                     )
                 };
 
@@ -106,7 +110,7 @@ impl<T: Sized> RawArray<T> {
                     *dest = *src;
                 }
 
-                self.ptr = NonNull::new(new_ptr);
+                self.ptr = Some(new_ptr);
                 self.capacity = new_capacity;
 
                 Ok(())
@@ -136,4 +140,16 @@ impl<T: Sized> RawArray<T> {
         }
     }
     // ANCHOR_END: DefRawArrayAsPtr
+}
+
+impl<T> Trace for RawArray<T> {
+    fn trace<V: immixcons::TraceVisitor>(
+        &self,
+        v: &mut V,
+        _guard: &'_ dyn crate::safeptr::MutatorScope,
+    ) {
+        if let Some(ptr) = self.ptr {
+            v.visit(ptr.as_untyped());
+        }
+    }
 }

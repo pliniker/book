@@ -79,6 +79,7 @@ impl ObjectHeader {
             TypeList::ArrayU8 => FatPtr::ArrayU8(RawPtr::untag(object_addr.cast::<ArrayU8>())),
             TypeList::ArrayU16 => FatPtr::ArrayU16(RawPtr::untag(object_addr.cast::<ArrayU16>())),
             TypeList::ArrayU32 => FatPtr::ArrayU32(RawPtr::untag(object_addr.cast::<ArrayU32>())),
+            TypeList::ByteCode => FatPtr::ByteCode(RawPtr::untag(object_addr.cast::<ByteCode>())),
             TypeList::CallFrameList => {
                 FatPtr::CallFrameList(RawPtr::untag(object_addr.cast::<CallFrameList>()))
             }

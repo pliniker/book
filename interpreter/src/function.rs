@@ -10,6 +10,7 @@ use crate::memory::MutatorView;
 use crate::printer::Print;
 use crate::safeptr::{CellPtr, MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::Value;
+use crate::trace::Trace;
 
 /// A function object type
 // ANCHOR: DefFunction
@@ -124,6 +125,15 @@ impl Print for Function {
         self.print(guard, f)?;
         write!(f, "\nbytecode follows:\n")?;
         self.code(guard).debug(guard, f)
+    }
+}
+
+impl Trace for Function {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.name.trace(v, guard);
+        self.code.trace(v, guard);
+        self.param_names.trace(v, guard);
+        self.nonlocal_refs.trace(v, guard);
     }
 }
 
@@ -250,5 +260,13 @@ impl Print for Partial {
         self.print(guard, f)?;
         write!(f, "\nbytecode follows:\n")?;
         self.func.get(guard).code(guard).debug(guard, f)
+    }
+}
+
+impl Trace for Partial {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.args.trace(v, guard);
+        self.env.trace(v, guard);
+        self.func.trace(v, guard);
     }
 }

@@ -17,6 +17,7 @@ use crate::safeptr::{
     AsScopedPtr, CellPtr, MutatorScope, RefPtr, ScopedPtr, TaggedCellPtr, TaggedScopedPtr,
 };
 use crate::taggedptr::{TaggedPtr, Value};
+use crate::trace::Trace;
 
 pub const RETURN_REG: usize = 0;
 pub const ENV_REG: usize = 1;
@@ -76,6 +77,13 @@ impl CallFrame {
 // ANCHOR: DefCallFrameList
 pub type CallFrameList = Array<CallFrame>;
 // ANCHOR_END: DefCallFrameList
+
+impl Trace for CallFrameList {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.inner_trace(v, guard);
+        // TODO iter over items
+    }
+}
 
 /// A closure upvalue as generally described by Lua 5.1 implementation.
 /// There is one main difference - in the Lua (and Crafting Interpreters) documentation, an upvalue
@@ -165,6 +173,12 @@ fn env_upvalue_lookup<'guard>(
             }
         }
         _ => unreachable!(),
+    }
+}
+
+impl Trace for Upvalue {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.value.trace(v, guard);
     }
 }
 
@@ -810,5 +824,15 @@ impl Thread {
         }
 
         Ok(EvalStatus::Pending)
+    }
+}
+
+impl Trace for Thread {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.globals.trace(v, guard);
+        self.stack.trace(v, guard);
+        self.upvalues.trace(v, guard);
+        self.frames.trace(v, guard);
+        self.instr.trace(v, guard);
     }
 }

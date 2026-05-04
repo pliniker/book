@@ -23,6 +23,7 @@ use crate::printer::Print;
 use crate::rawarray::{DEFAULT_ARRAY_SIZE, RawArray, default_array_growth};
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::Value;
+use crate::trace::Trace;
 
 // For a RefCell-style interior mutability pattern
 type BorrowFlag = isize;
@@ -162,6 +163,11 @@ impl<T: Sized + Clone> Array<T> {
         } else {
             &mut []
         }
+    }
+
+    pub fn inner_trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        let inner = self.data.get();
+        inner.trace(v, guard);
     }
 }
 
@@ -516,6 +522,24 @@ impl Print for Array<TaggedCellPtr> {
         }
 
         write!(f, "]")
+    }
+}
+
+impl Trace for ArrayU8 {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.inner_trace(v, guard);
+    }
+}
+
+impl Trace for ArrayU16 {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.inner_trace(v, guard);
+    }
+}
+
+impl Trace for ArrayU32 {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.inner_trace(v, guard);
     }
 }
 

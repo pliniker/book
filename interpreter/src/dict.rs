@@ -13,6 +13,7 @@ use crate::printer::Print;
 use crate::rawarray::{ArraySize, RawArray, default_array_growth};
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
 use crate::taggedptr::Value;
+use crate::trace::Trace;
 
 // max load factor before resizing the table
 const LOAD_FACTOR: f32 = 0.80;
@@ -318,6 +319,24 @@ impl Print for Dict {
     fn print(&self, _guard: &'_ dyn MutatorScope, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO
         write!(f, "Dict[...]")
+    }
+}
+
+impl Trace for Dict {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        let data = self.data.get();
+
+        let maybe_ptr = data.as_ptr();
+        if let Some(ptr) = maybe_ptr {
+            for index in 0..data.capacity() {
+                let entry =
+                    unsafe { &mut *(ptr.offset(index as isize) as *mut DictItem) as &mut DictItem };
+                if !entry.hash != TOMBSTONE {
+                    entry.key.trace(v, guard);
+                    entry.value.trace(v, guard);
+                }
+            }
+        }
     }
 }
 

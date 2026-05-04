@@ -16,7 +16,7 @@ use std::fmt;
 use immixcons::{AllocRaw, RawPtr};
 
 use crate::array::{ArrayU8, ArrayU16, ArrayU32};
-use crate::bytecode::InstructionStream;
+use crate::bytecode::{ArrayOpcode, ByteCode, InstructionStream};
 use crate::dict::Dict;
 use crate::function::{Function, Partial};
 use crate::list::List;
@@ -38,9 +38,11 @@ use crate::vm::{CallFrameList, Thread, Upvalue};
 // ANCHOR: DefValue
 #[derive(Copy, Clone)]
 pub enum Value<'guard> {
+    ArrayOpcode(ScopedPtr<'guard, ArrayOpcode>),
     ArrayU8(ScopedPtr<'guard, ArrayU8>),
     ArrayU16(ScopedPtr<'guard, ArrayU16>),
     ArrayU32(ScopedPtr<'guard, ArrayU32>),
+    ByteCode(ScopedPtr<'guard, ByteCode>),
     CallFrameList(ScopedPtr<'guard, CallFrameList>),
     Dict(ScopedPtr<'guard, Dict>),
     Function(ScopedPtr<'guard, Function>),
@@ -83,20 +85,25 @@ impl fmt::Display for Value<'_> {
 impl fmt::Debug for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Value::ArrayOpcode(_) => write!(f, "ArrayOpcode"),
             Value::ArrayU8(a) => a.debug(self, f),
             Value::ArrayU16(a) => a.debug(self, f),
             Value::ArrayU32(a) => a.debug(self, f),
+            Value::ByteCode(_) => write!(f, "ByteCode"),
+            Value::CallFrameList(_) => write!(f, "CallFrameList"),
             Value::Dict(d) => d.debug(self, f),
             Value::Function(n) => n.debug(self, f),
+            Value::InstructionStream(_) => write!(f, "InstructionStream"),
             Value::List(a) => a.debug(self, f),
             Value::Nil => write!(f, "nil"),
             Value::Number(n) => write!(f, "{}", *n),
+            Value::NumberObject(_) => write!(f, "NumberObject"),
             Value::Pair(p) => p.debug(self, f),
             Value::Partial(p) => p.debug(self, f),
             Value::Symbol(s) => s.debug(self, f),
             Value::Text(t) => t.debug(self, f),
+            Value::Thread(_) => write!(f, "Thread"),
             Value::Upvalue(_) => write!(f, "Upvalue"),
-            _ => write!(f, "<unidentified-object-type>"),
         }
     }
 }
@@ -111,6 +118,7 @@ pub enum FatPtr {
     ArrayU8(RawPtr<ArrayU8>),
     ArrayU16(RawPtr<ArrayU16>),
     ArrayU32(RawPtr<ArrayU32>),
+    ByteCode(RawPtr<ByteCode>),
     CallFrameList(RawPtr<CallFrameList>),
     Dict(RawPtr<Dict>),
     Function(RawPtr<Function>),
@@ -137,6 +145,7 @@ impl FatPtr {
             FatPtr::ArrayU8(raw) => Value::ArrayU8(ScopedPtr::new(guard, raw.scoped_ref(guard))),
             FatPtr::ArrayU16(raw) => Value::ArrayU16(ScopedPtr::new(guard, raw.scoped_ref(guard))),
             FatPtr::ArrayU32(raw) => Value::ArrayU32(ScopedPtr::new(guard, raw.scoped_ref(guard))),
+            FatPtr::ByteCode(raw) => Value::ByteCode(ScopedPtr::new(guard, raw.scoped_ref(guard))),
             FatPtr::CallFrameList(raw) => {
                 Value::CallFrameList(ScopedPtr::new(guard, raw.scoped_ref(guard)))
             }
@@ -335,6 +344,7 @@ impl From<FatPtr> for TaggedPtr {
             FatPtr::ArrayU8(raw) => TaggedPtr::object(raw),
             FatPtr::ArrayU16(raw) => TaggedPtr::object(raw),
             FatPtr::ArrayU32(raw) => TaggedPtr::object(raw),
+            FatPtr::ByteCode(raw) => TaggedPtr::object(raw),
             FatPtr::CallFrameList(raw) => TaggedPtr::object(raw),
             FatPtr::Dict(raw) => TaggedPtr::object(raw),
             FatPtr::Function(raw) => TaggedPtr::object(raw),
