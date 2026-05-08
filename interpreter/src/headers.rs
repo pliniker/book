@@ -5,7 +5,7 @@ use immixcons::{
     TraceVisitor,
 };
 
-use crate::array::{ArrayU8, ArrayU16, ArrayU32};
+use crate::array::{ArrayU16, ArrayU32, ArrayU8};
 use crate::bytecode::{ArrayOpcode, ByteCode, InstructionStream};
 use crate::dict::Dict;
 use crate::function::{Function, Partial};
@@ -13,7 +13,7 @@ use crate::list::List;
 use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
-use crate::pointerops::{TAG_MASK, Tagged};
+use crate::pointerops::{Tagged, TAG_MASK};
 use crate::safeptr::MutatorScope;
 use crate::symbol::Symbol;
 use crate::taggedptr::{FatPtr, Value};

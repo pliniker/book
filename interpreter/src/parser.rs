@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 use std::marker::PhantomData;
 
-use crate::error::{RuntimeError, SourcePos, err_parser, err_parser_wpos};
-use crate::lexer::{Token, TokenType, tokenize};
+use crate::error::{err_parser, err_parser_wpos, RuntimeError, SourcePos};
+use crate::lexer::{tokenize, Token, TokenType};
 use crate::memory::MutatorView;
 use crate::pair::Pair;
 use crate::safeptr::{MutatorScope, TaggedCellPtr, TaggedScopedPtr};

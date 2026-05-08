@@ -2,9 +2,9 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use crate::array::{ArraySize, ArrayU16};
-use crate::bytecode::{ByteCode, JUMP_UNKNOWN, JumpOffset, Opcode, Register, UpvalueId};
+use crate::bytecode::{ByteCode, JumpOffset, Opcode, Register, UpvalueId, JUMP_UNKNOWN};
 use crate::containers::{AnyContainerFromSlice, StackContainer};
-use crate::error::{RuntimeError, err_eval};
+use crate::error::{err_eval, RuntimeError};
 use crate::function::Function;
 use crate::list::List;
 use crate::memory::MutatorView;

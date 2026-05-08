@@ -6,7 +6,7 @@ use crate::array::{Array, ArraySize};
 use crate::containers::{
     Container, IndexedContainer, SliceableContainer, StackAnyContainer, StackContainer,
 };
-use crate::error::{RuntimeError, err_eval};
+use crate::error::{err_eval, RuntimeError};
 use crate::list::List;
 use crate::memory::MutatorView;
 use crate::printer::Print;

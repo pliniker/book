@@ -7,8 +7,8 @@ use crate::safeptr::TaggedScopedPtr;
 use crate::vm::{EvalStatus, Thread};
 
 use log::trace;
-use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 
 fn get_or_create_history(filename: &str) -> Option<String> {
     match dirs::home_dir() {

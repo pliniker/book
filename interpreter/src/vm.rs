@@ -7,7 +7,7 @@ use crate::containers::{
     SliceableContainer, StackAnyContainer, StackContainer,
 };
 use crate::dict::Dict;
-use crate::error::{RuntimeError, err_eval};
+use crate::error::{err_eval, RuntimeError};
 use crate::function::{Function, Partial};
 use crate::list::List;
 use crate::memory::MutatorView;
