@@ -13,6 +13,17 @@ impl Trace for List {
         guard: &'_ dyn crate::safeptr::MutatorScope,
     ) {
         self.inner_trace(v, guard);
-        // TODO iter over items
+
+        // Safety note
+        // -----------
+        // Given that Array<T> is single-thread only:
+        // At the time of borrowing this as a slice, we should not need to be
+        // concerned about mutations under our feet. We are reading each
+        // pointer only.
+        let slice = unsafe { self.as_slice(guard) };
+
+        for ptr in slice {
+            ptr.trace(v, guard);
+        }
     }
 }

@@ -72,6 +72,12 @@ impl CallFrame {
     }
 }
 
+impl Trace for CallFrame {
+    fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
+        self.function.trace(v, guard);
+    }
+}
+
 /// Call frames are stored in a separate stack to the register window stack. This simplifies types
 /// and stack math.
 // ANCHOR: DefCallFrameList
@@ -81,7 +87,12 @@ pub type CallFrameList = Array<CallFrame>;
 impl Trace for CallFrameList {
     fn trace<V: immixcons::TraceVisitor>(&self, v: &mut V, guard: &'_ dyn MutatorScope) {
         self.inner_trace(v, guard);
-        // TODO iter over items
+
+        let slice = unsafe { self.as_slice(guard) };
+
+        for ptr in slice {
+            ptr.trace(v, guard);
+        }
     }
 }
 
