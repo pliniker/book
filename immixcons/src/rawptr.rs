@@ -46,7 +46,7 @@ impl<T: Sized> RawPtr<T> {
     /// Get a `&` reference to the object. Unsafe because there are no guarantees at this level
     /// about the internal pointer's validity.
     pub unsafe fn as_ref(&self) -> &T {
-        self.ptr.as_ref()
+        unsafe { self.ptr.as_ref() }
     }
 }
 

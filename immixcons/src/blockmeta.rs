@@ -34,21 +34,23 @@ impl BlockMeta {
     /// (unlike `BlockMeta::new`), and so is appropriate for reading/updating
     /// metadata for an existing block.
     pub unsafe fn attach(block_ptr: *const u8) -> BlockMeta {
-        BlockMeta {
-            lines: block_ptr.add(constants::LINE_MARK_START) as *mut u8,
-            object_map: block_ptr.add(constants::OBJECT_MAP_START) as *mut u8,
+        unsafe {
+            BlockMeta {
+                lines: block_ptr.add(constants::LINE_MARK_START) as *mut u8,
+                object_map: block_ptr.add(constants::OBJECT_MAP_START) as *mut u8,
+            }
         }
     }
 
     unsafe fn as_block_mark(&mut self) -> &mut u8 {
         // Use the last byte of the block because no object will occupy the line
         // associated with this: it's the mark bits.
-        &mut *self.lines.add(constants::LINE_COUNT - 1)
+        unsafe { &mut *self.lines.add(constants::LINE_COUNT - 1) }
     }
 
     unsafe fn as_line_mark(&mut self, line: usize) -> &mut u8 {
         debug_assert!(line < constants::LINE_COUNT);
-        &mut *self.lines.add(line)
+        unsafe { &mut *self.lines.add(line) }
     }
 
     /// Mark the indexed line

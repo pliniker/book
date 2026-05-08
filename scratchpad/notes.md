@@ -11,9 +11,9 @@ ImmixCons:
   - [X] root pointer id needs to check object map
 - [X] stack scan logic
 - [X] object tracing via object header
-  - [ ] trace within interpreter objects
-  - [ ] array trace
-  - [ ] dict trace
+  - [X] trace within interpreter objects
+  - [X] array trace
+  - [X] dict trace
 - [ ] marking objects, lines, object maps, blocks
 - [ ] recycle blocks
 - [ ] block management

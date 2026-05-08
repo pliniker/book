@@ -19,9 +19,9 @@ pub struct BumpBlock {
 impl BumpBlock {
     /// Start working with a new block, wiping lines and object map clean
     pub unsafe fn new(block: *const u8) -> BumpBlock {
-        BlockMeta::new(block);
+        unsafe { BlockMeta::new(block) };
         BumpBlock {
-            cursor: block.add(constants::BLOCK_CAPACITY),
+            cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
             limit: block,
             block: block,
         }
@@ -30,7 +30,7 @@ impl BumpBlock {
     /// Attach to an existing Block, making no modifications
     pub unsafe fn attach(block: *const u8) -> BumpBlock {
         BumpBlock {
-            cursor: block.add(constants::BLOCK_CAPACITY),
+            cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
             limit: block,
             block: block,
         }
@@ -39,9 +39,11 @@ impl BumpBlock {
     /// Write an object into the block at the given offset. The offset is not
     /// checked for overflow, hence this function is unsafe.
     unsafe fn write<T>(&mut self, object: T, offset: usize) -> *const T {
-        let p = self.block.add(offset) as *mut T;
-        write(p, object);
-        p
+        unsafe {
+            let p = self.block.add(offset) as *mut T;
+            write(p, object);
+            p
+        }
     }
 
     /// Find a hole of at least the requested size and return Some(pointer) to it, or
