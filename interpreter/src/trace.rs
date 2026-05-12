@@ -1,8 +1,7 @@
 use crate::memory::HeapStorage;
 use crate::safeptr::MutatorScope;
 use crate::taggedptr::Value;
-pub use immixcons::TraceVisitor;
-use immixcons::{AllocRaw, HeapTracer, RawPtr};
+use immixcons::{AllocRaw, HeapTracer, RawPtr, TraceVisitor};
 use log::trace;
 
 /// This empty struct will provide scope guarded access to Trace::trace()

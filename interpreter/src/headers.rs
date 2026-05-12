@@ -2,7 +2,6 @@
 /// object, which also contains a type tag but with space for many more types.
 use immixcons::{
     AllocHeader, AllocObject, AllocRaw, AllocTypeId, ArraySize, Mark, RawPtr, SizeClass,
-    TraceVisitor,
 };
 
 use crate::array::{ArrayU16, ArrayU32, ArrayU8};
@@ -14,9 +13,8 @@ use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
 use crate::pointerops::{Tagged, TAG_MASK};
-use crate::safeptr::MutatorScope;
 use crate::symbol::Symbol;
-use crate::taggedptr::{FatPtr, Value};
+use crate::taggedptr::FatPtr;
 use crate::text::Text;
 use crate::vm::{CallFrameList, Thread, Upvalue};
 use std::cell::Cell;
