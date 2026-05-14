@@ -60,11 +60,3 @@ This _just_ needs:
  - to get object headers from pointers to set mark bits
  - read only to object memory space
 
-Safety:
- - unsafe to trace? Why would it be?
- - gray area: are we taking immutable aliases of object references?
- - gray area: this is only manipulating the object header
- - gray area: how could this be _unsafe_?
- - no: we are dereferencing pointers to get other pointers
- - yes: we are not dereferencing pointers in safe rust
- - yes: we are using cell everywhere and no threading, so safe

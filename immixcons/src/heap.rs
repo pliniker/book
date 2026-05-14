@@ -168,7 +168,7 @@ pub struct ImmixConsHeap<H> {
 }
 // ANCHOR_END: DefStickyImmixHeap
 
-impl<H> ImmixConsHeap<H> {
+impl<H: AllocHeader> ImmixConsHeap<H> {
     pub fn new() -> ImmixConsHeap<H> {
         ImmixConsHeap {
             blocks: UnsafeCell::new(BlockList::new()),
@@ -241,6 +241,38 @@ impl<H> ImmixConsHeap<H> {
 
         Ok(dest)
     }
+
+    /// This function takes care of marking block attributes
+    ///
+    /// Safety:
+    /// Assumes that the provided pointer is a valid object in a valid block
+    ///
+    /// Returns true if the object was already marked; otherwise false if it
+    /// was never seen in the current mark iteration.
+    unsafe fn mark(ptr: usize) -> bool {
+        // 1. mark the object
+        let header_ptr = Self::get_header(RawPtr::new(ptr as *mut ()));
+        unsafe {
+            let header = header_ptr.as_ref();
+            if header.mark_is(Mark::Marked) {
+                return true;
+            }
+            header.mark(Mark::Marked);
+        }
+
+        let block_base = (ptr & constants::BLOCK_PTR_MASK) as *const u8;
+        let mut block_meta = unsafe { BlockMeta::attach(block_base) };
+
+        let ptr_offset = ptr & constants::BLOCK_SIZE;
+
+        // 2. mark the line
+        block_meta.mark_line(ptr_offset / constants::LINE_COUNT);
+
+        // 3. mark the block
+        block_meta.mark_block();
+
+        false
+    }
 }
 
 impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
@@ -279,7 +311,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         }
 
         // Mark this object in the block's object map
-        let object_offset = object_space as usize - dest.block as usize;
+        let object_offset = object_space.addr() - dest.block.addr();
         unsafe {
             let mut meta = BlockMeta::attach(dest.block);
             meta.mark_object(object_offset);
@@ -322,7 +354,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         }
 
         // Mark this object in the block's object map
-        let object_offset = array_space as usize - dest.block as usize;
+        let object_offset = array_space.addr() - dest.block.addr();
         unsafe {
             let mut meta = BlockMeta::attach(dest.block);
             meta.mark_object(object_offset);
@@ -371,26 +403,14 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 
         // 2.1 trace the stack scan
         for ptr in stack_scan.iter() {
-            let header_ptr = Self::get_header(RawPtr::new(*ptr as *mut ()));
-            unsafe {
-                let header = header_ptr.as_ref();
-                if header.mark_is(Mark::Marked) {
-                    continue;
-                }
-                header.mark(Mark::Marked);
+            if !unsafe { Self::mark(*ptr) } {
                 tracer.visit(RawPtr::new(*ptr as *const ()));
-            };
+            }
         }
 
         // 2.2 trace the heap scan
         while let Some(object) = tracer.pop() {
-            let header_ptr = Self::get_header(object);
-            unsafe {
-                let header = header_ptr.as_ref();
-                if header.mark_is(Mark::Marked) {
-                    continue;
-                }
-                header.mark(Mark::Marked);
+            if !unsafe { Self::mark(object.addr()) } {
                 tracer.visit(object);
             }
         }
@@ -402,19 +422,12 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     }
 }
 
-impl<H> Default for ImmixConsHeap<H> {
-    fn default() -> ImmixConsHeap<H> {
-        ImmixConsHeap::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
     use super::*;
     use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
     use std::cell::Cell;
-    use std::collections::btree_set::Union;
     use std::slice::from_raw_parts;
 
     struct TestHeader {

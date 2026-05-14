@@ -15,7 +15,7 @@ use std::fmt;
 
 use immixcons::{AllocRaw, RawPtr};
 
-use crate::array::{ArrayU16, ArrayU32, ArrayU8};
+use crate::array::{ArrayU8, ArrayU16, ArrayU32};
 use crate::bytecode::{ArrayOpcode, ByteCode, InstructionStream};
 use crate::dict::Dict;
 use crate::function::{Function, Partial};
@@ -24,7 +24,7 @@ use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
 use crate::pointerops::{
-    get_tag, AsScopedRef, Tagged, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL,
+    AsScopedRef, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL, Tagged, get_tag,
 };
 use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr};
@@ -115,6 +115,7 @@ impl MutatorScope for Value<'_> {}
 // ANCHOR: DefFatPtr
 #[derive(Copy, Clone)]
 pub enum FatPtr {
+    ArrayOpcode(RawPtr<ArrayOpcode>),
     ArrayU8(RawPtr<ArrayU8>),
     ArrayU16(RawPtr<ArrayU16>),
     ArrayU32(RawPtr<ArrayU32>),
@@ -142,6 +143,9 @@ impl FatPtr {
     // ANCHOR: DefFatPtrAsValue
     pub fn as_value<'guard>(&self, guard: &'guard dyn MutatorScope) -> Value<'guard> {
         match self {
+            FatPtr::ArrayOpcode(raw) => {
+                Value::ArrayOpcode(ScopedPtr::new(guard, raw.scoped_ref(guard)))
+            }
             FatPtr::ArrayU8(raw) => Value::ArrayU8(ScopedPtr::new(guard, raw.scoped_ref(guard))),
             FatPtr::ArrayU16(raw) => Value::ArrayU16(ScopedPtr::new(guard, raw.scoped_ref(guard))),
             FatPtr::ArrayU32(raw) => Value::ArrayU32(ScopedPtr::new(guard, raw.scoped_ref(guard))),
@@ -182,17 +186,22 @@ macro_rules! fatptr_from_rawptr {
     };
 }
 
+fatptr_from_rawptr!(ArrayOpcode, ArrayOpcode);
 fatptr_from_rawptr!(ArrayU8, ArrayU8);
 fatptr_from_rawptr!(ArrayU16, ArrayU16);
 fatptr_from_rawptr!(ArrayU32, ArrayU32);
+fatptr_from_rawptr!(ByteCode, ByteCode);
+fatptr_from_rawptr!(CallFrameList, CallFrameList);
 fatptr_from_rawptr!(Dict, Dict);
 fatptr_from_rawptr!(Function, Function);
+fatptr_from_rawptr!(InstructionStream, InstructionStream);
 fatptr_from_rawptr!(List, List);
 fatptr_from_rawptr!(NumberObject, NumberObject);
 fatptr_from_rawptr!(Pair, Pair);
 fatptr_from_rawptr!(Partial, Partial);
 fatptr_from_rawptr!(Symbol, Symbol);
 fatptr_from_rawptr!(Text, Text);
+fatptr_from_rawptr!(Thread, Thread);
 fatptr_from_rawptr!(Upvalue, Upvalue);
 
 /// Conversion from an integer type
@@ -344,6 +353,7 @@ impl From<FatPtr> for TaggedPtr {
             FatPtr::ArrayU8(raw) => TaggedPtr::object(raw),
             FatPtr::ArrayU16(raw) => TaggedPtr::object(raw),
             FatPtr::ArrayU32(raw) => TaggedPtr::object(raw),
+            FatPtr::ArrayOpcode(raw) => TaggedPtr::object(raw),
             FatPtr::ByteCode(raw) => TaggedPtr::object(raw),
             FatPtr::CallFrameList(raw) => TaggedPtr::object(raw),
             FatPtr::Dict(raw) => TaggedPtr::object(raw),
