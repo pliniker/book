@@ -263,9 +263,8 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
         let block_base = (ptr & constants::BLOCK_PTR_MASK) as *const u8;
         let mut block_meta = unsafe { BlockMeta::attach(block_base) };
 
-        let ptr_offset = ptr & constants::BLOCK_SIZE;
-
         // 2. mark the line
+        let ptr_offset = ptr & constants::BLOCK_SIZE;
         block_meta.mark_line(ptr_offset / constants::LINE_COUNT);
 
         // 3. mark the block

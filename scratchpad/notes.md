@@ -14,7 +14,7 @@ ImmixCons:
   - [X] trace within interpreter objects
   - [X] array trace
   - [X] dict trace
-- [ ] marking objects, lines, object maps, blocks
+- [X] marking objects, lines, object maps, blocks
 - [ ] recycle blocks
 - [ ] block management
 - [ ] back pressure on allocation, triggering gc
