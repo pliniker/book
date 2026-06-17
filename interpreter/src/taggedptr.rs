@@ -15,7 +15,7 @@ use std::fmt;
 
 use immixcons::{AllocRaw, RawPtr};
 
-use crate::array::{ArrayU8, ArrayU16, ArrayU32};
+use crate::array::{ArrayU16, ArrayU32, ArrayU8};
 use crate::bytecode::{ArrayOpcode, ByteCode, InstructionStream};
 use crate::dict::Dict;
 use crate::function::{Function, Partial};
@@ -24,7 +24,7 @@ use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
 use crate::pointerops::{
-    AsScopedRef, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL, Tagged, get_tag,
+    get_tag, AsScopedRef, Tagged, TAG_NUMBER, TAG_OBJECT, TAG_PAIR, TAG_SYMBOL,
 };
 use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr};

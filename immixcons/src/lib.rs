@@ -7,6 +7,7 @@ mod blockmeta;
 mod bumpblock;
 mod constants;
 mod heap;
+mod histogram;
 mod rawptr;
 mod stack;
 

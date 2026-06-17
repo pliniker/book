@@ -1,6 +1,7 @@
 use log::trace;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ptr::write;
@@ -13,6 +14,7 @@ use crate::allocator::{
 use crate::blockmeta::BlockMeta;
 use crate::bumpblock::BumpBlock;
 use crate::constants;
+use crate::histogram::Histogram;
 use crate::rawptr::RawPtr;
 use crate::stack::SystemStackInfo;
 use blockalloc::{Block, BlockError};
@@ -73,7 +75,9 @@ impl TraceVisitor for HeapTracer {
 struct BlockList {
     head: Option<BumpBlock>,
     overflow: Option<BumpBlock>,
+    empty: Vec<usize>,
     rest: HashMap<usize, Block>,
+    histogram: Histogram,
 }
 // ANCHOR_END: DefBlockList
 
@@ -82,7 +86,9 @@ impl BlockList {
         BlockList {
             head: None,
             overflow: None,
+            empty: Vec::new(),
             rest: HashMap::new(),
+            histogram: Histogram::new(),
         }
     }
 
