@@ -1,7 +1,6 @@
 use log::trace;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ptr::write;
@@ -68,15 +67,13 @@ impl TraceVisitor for HeapTracer {
 /// A list of blocks as the current block being allocated into and a list
 /// of full blocks
 // TODO:
-// free: Vec<usize>,
-// recycle: Vec<usize>
-// large: ?
+//  - large objects
 // ANCHOR: DefBlockList
 struct BlockList {
     head: Option<BumpBlock>,
     overflow: Option<BumpBlock>,
-    empty: Vec<usize>,
-    rest: HashMap<usize, Block>,
+    empty_blocks: Vec<usize>,
+    all_blocks: HashMap<usize, Block>,
     histogram: Histogram,
 }
 // ANCHOR_END: DefBlockList
@@ -86,16 +83,49 @@ impl BlockList {
         BlockList {
             head: None,
             overflow: None,
-            empty: Vec::new(),
-            rest: HashMap::new(),
+            empty_blocks: Vec::new(),
+            all_blocks: HashMap::new(),
             histogram: Histogram::new(),
         }
+    }
+
+    // Allocate a block and add it to the storage bank
+    fn get_new_block(&mut self) -> Result<BumpBlock, AllocError> {
+        let block = Block::new(constants::BLOCK_SIZE)?;
+        let bumpblock = unsafe { BumpBlock::new(block.as_ptr()) };
+        self.all_blocks.insert(block.addr(), block);
+        Ok(bumpblock)
+    }
+
+    fn pop_empty_block(&mut self) -> Result<BumpBlock, AllocError> {
+        if let Some(block_base) = self.empty_blocks.pop() {
+            if let Some(block) = self.all_blocks.get(&block_base) {
+                return Ok(unsafe { BumpBlock::new(block.as_ptr()) });
+            }
+        }
+
+        // fall back on allocator
+        self.get_new_block()
+    }
+
+    /// Manage empty blocks and recycling blocks
+    fn manage_blocks(&mut self) -> Result<(), AllocError> {
+        // generate histogram
+
+        // parse histogram:
+        //  - move empty blocks to empty_blocks list
+
+        // check empty blocks
+        //  - do we need more?
+        //  - can we release some?
+
+        Ok(())
     }
 
     /// Allocate a space for a medium object into an overflow block
     // TODO this just allocates a new block on demand, but should look at the free block list first
     // ANCHOR: DefOverflowAlloc
-    fn overflow_alloc(&mut self, alloc_size: usize) -> Result<AllocDest, AllocError> {
+    fn find_overflow_space(&mut self, alloc_size: usize) -> Result<AllocDest, AllocError> {
         assert!(alloc_size <= constants::BLOCK_CAPACITY);
 
         let dest = match self.overflow {
@@ -111,7 +141,7 @@ impl BlockList {
                         let block = Block::new(constants::BLOCK_SIZE)?;
                         *overflow = unsafe { BumpBlock::new(block.as_ptr()) };
 
-                        self.rest.insert(block.addr(), block);
+                        self.all_blocks.insert(block.addr(), block);
 
                         let space = overflow.inner_alloc(alloc_size).expect("Unexpected error!");
                         AllocDest::new(overflow.block_ptr(), space)
@@ -125,7 +155,7 @@ impl BlockList {
                 let mut overflow = unsafe { BumpBlock::new(block.as_ptr()) };
                 let block_ptr = block.as_ptr();
 
-                self.rest.insert(block.addr(), block);
+                self.all_blocks.insert(block.addr(), block);
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation
@@ -142,6 +172,69 @@ impl BlockList {
         Ok(dest)
     }
     // ANCHOR_END: DefOverflowAlloc
+    /// Find a space for a small, medium or large object
+
+    // TODO this just allocates a new block, but should look at
+    // recycled blocks first
+    fn find_space(
+        &mut self,
+        alloc_size: usize,
+        size_class: SizeClass,
+    ) -> Result<AllocDest, AllocError> {
+        // TODO handle large objects
+        if size_class == SizeClass::Large {
+            // simply fail for objects larger than the block size
+            return Err(AllocError::BadRequest);
+        }
+
+        let dest = match self.head {
+            // We already have a block to try to use...
+            Some(ref mut head) => {
+                // If this is a medium object that doesn't fit in the hole, use overflow
+                if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
+                    return self.find_overflow_space(alloc_size);
+                }
+
+                // This is a small object that might fit in the current block...
+                match head.inner_alloc(alloc_size) {
+                    // the block has a suitable hole
+                    Some(space) => AllocDest::new(head.block_ptr(), space),
+
+                    // the block does not have a suitable hole so allocate a new head block
+                    None => {
+                        let block = Block::new(constants::BLOCK_SIZE)?;
+                        *head = unsafe { BumpBlock::new(block.as_ptr()) };
+
+                        self.all_blocks.insert(block.addr(), block);
+
+                        let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
+                        AllocDest::new(head.block_ptr(), space)
+                    }
+                }
+            }
+
+            // We have no blocks to work with yet so make one
+            None => {
+                let block = Block::new(constants::BLOCK_SIZE)?;
+                let mut head = unsafe { BumpBlock::new(block.as_ptr()) };
+                let block_ptr = block.as_ptr();
+
+                self.all_blocks.insert(block.addr(), block);
+
+                // earlier check for object size < block size should
+                // mean we dont fail this expectation
+                let space = head
+                    .inner_alloc(alloc_size)
+                    .expect("We expected this object to fit!");
+
+                self.head = Some(head);
+
+                AllocDest::new(block_ptr, space)
+            }
+        };
+
+        Ok(dest)
+    }
 
     /// Using best effort logic, estimate if a pointer is a valid heap pointer.
     ///
@@ -153,7 +246,7 @@ impl BlockList {
     fn is_conservatively_a_ptr(&self, ptr: usize) -> Option<usize> {
         let block_base = ptr & constants::BLOCK_PTR_MASK;
 
-        if let Some(ref block) = self.rest.get(&block_base) {
+        if let Some(ref block) = self.all_blocks.get(&block_base) {
             let block_offset = ptr & !constants::BLOCK_PTR_MASK;
             let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
             if block_offset < constants::ALLOC_UPPER_EXTENT && meta.is_object_marked(block_offset) {
@@ -192,60 +285,7 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
         size_class: SizeClass,
     ) -> Result<AllocDest, AllocError> {
         let blocks = unsafe { &mut *self.blocks.get() };
-
-        // TODO handle large objects
-        if size_class == SizeClass::Large {
-            // simply fail for objects larger than the block size
-            return Err(AllocError::BadRequest);
-        }
-
-        let dest = match blocks.head {
-            // We already have a block to try to use...
-            Some(ref mut head) => {
-                // If this is a medium object that doesn't fit in the hole, use overflow
-                if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
-                    return blocks.overflow_alloc(alloc_size);
-                }
-
-                // This is a small object that might fit in the current block...
-                match head.inner_alloc(alloc_size) {
-                    // the block has a suitable hole
-                    Some(space) => AllocDest::new(head.block_ptr(), space),
-
-                    // the block does not have a suitable hole so allocate a new head block
-                    None => {
-                        let block = Block::new(constants::BLOCK_SIZE)?;
-                        *head = unsafe { BumpBlock::new(block.as_ptr()) };
-
-                        blocks.rest.insert(block.addr(), block);
-
-                        let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
-                        AllocDest::new(head.block_ptr(), space)
-                    }
-                }
-            }
-
-            // We have no blocks to work with yet so make one
-            None => {
-                let block = Block::new(constants::BLOCK_SIZE)?;
-                let mut head = unsafe { BumpBlock::new(block.as_ptr()) };
-                let block_ptr = block.as_ptr();
-
-                blocks.rest.insert(block.addr(), block);
-
-                // earlier check for object size < block size should
-                // mean we dont fail this expectation
-                let space = head
-                    .inner_alloc(alloc_size)
-                    .expect("We expected this object to fit!");
-
-                blocks.head = Some(head);
-
-                AllocDest::new(block_ptr, space)
-            }
-        };
-
-        Ok(dest)
+        blocks.find_space(alloc_size, size_class)
     }
 
     /// This function takes care of marking block attributes
