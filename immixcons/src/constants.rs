@@ -60,3 +60,6 @@ pub const MEDIUM_OBJECT_MIN: usize = SMALL_OBJECT_MAX + 1;
 pub const MEDIUM_OBJECT_MAX: usize = BLOCK_CAPACITY;
 pub const LARGE_OBJECT_MIN: usize = MEDIUM_OBJECT_MAX + 1;
 pub const LARGE_OBJECT_MAX: usize = MAX_ALLOC_SIZE;
+
+// Block management
+pub const BLOCKS_KEEP_EMPTY_COUNT: usize = 4;

@@ -195,6 +195,32 @@ impl BlockMeta {
         None
     }
     // ANCHOR_END: DefFindNextHole
+
+    /// Count available spaces in the block, ignoring single holes that conservatively
+    /// cannot be used.
+    pub fn count_holes(&self) -> usize {
+        let mut count = 0;
+        let mut incr = 0;
+        for index in (0..constants::LINE_COUNT).rev() {
+            let marked = unsafe { *self.lines.add(index) };
+            // if the line hasn't been marked, it's a hole: count it
+            if marked == 0 {
+                incr += 1;
+            } else {
+                // if we reached a marked block and we have more than one hole,
+                // save the hole count and reset counting
+                if incr > 1 {
+                    count += incr;
+                    incr = 0;
+                }
+            }
+        }
+        // if we didn't reach any more marked blocks, add the remainder
+        if incr > 1 {
+            count += incr;
+        }
+        count
+    }
 }
 
 #[cfg(test)]

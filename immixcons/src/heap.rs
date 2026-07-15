@@ -7,8 +7,7 @@ use std::ptr::write;
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
-    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, GcError, Mark, SizeClass,
-    TraceVisitor,
+    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, SizeClass, TraceVisitor,
 };
 use crate::blockmeta::BlockMeta;
 use crate::bumpblock::BumpBlock;
@@ -97,6 +96,8 @@ impl BlockList {
         Ok(bumpblock)
     }
 
+    // Get an empty block, falling back to allocating a new block if there are no
+    // empty blocks
     fn pop_empty_block(&mut self) -> Result<BumpBlock, AllocError> {
         if let Some(block_base) = self.empty_blocks.pop() {
             if let Some(block) = self.all_blocks.get(&block_base) {
@@ -111,13 +112,34 @@ impl BlockList {
     /// Manage empty blocks and recycling blocks
     fn manage_blocks(&mut self) -> Result<(), AllocError> {
         // generate histogram
+        self.histogram.clear();
+
+        for (block_addr, block) in self.all_blocks.iter() {
+            let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
+            let holes = meta.count_holes();
+            self.histogram.push_block(holes, *block_addr);
+        }
 
         // parse histogram:
         //  - move empty blocks to empty_blocks list
+        for block_addr in self.histogram.drain_empty_blocks() {
+            self.empty_blocks.push(*block_addr);
+        }
 
-        // check empty blocks
-        //  - do we need more?
-        //  - can we release some?
+        // check empty block count, release surplus
+        let empty_count = self.empty_blocks.len();
+        if empty_count > constants::BLOCKS_KEEP_EMPTY_COUNT {
+            let take = empty_count - constants::BLOCKS_KEEP_EMPTY_COUNT;
+            self.empty_blocks.drain(0..take);
+        } else if empty_count < constants::BLOCKS_KEEP_EMPTY_COUNT {
+            let additional = constants::BLOCKS_KEEP_EMPTY_COUNT - empty_count;
+            for _ in 0..additional {
+                let block = Block::new(constants::BLOCK_SIZE)?;
+                let block_ptr = block.addr();
+                self.all_blocks.insert(block_ptr, block);
+                self.empty_blocks.push(block_ptr);
+            }
+        }
 
         Ok(())
     }
@@ -128,26 +150,12 @@ impl BlockList {
     fn find_overflow_space(&mut self, alloc_size: usize) -> Result<AllocDest, AllocError> {
         assert!(alloc_size <= constants::BLOCK_CAPACITY);
 
-        let dest = match self.overflow {
+        // Take the current overflow block out so we can borrow `self` again
+        // below without a conflict (the old `ref mut overflow` kept a borrow
+        // of `self` alive across the `pop_empty_block` call).
+        let mut overflow = match self.overflow.take() {
             // We already have an overflow block to try to use...
-            Some(ref mut overflow) => {
-                // This is a medium object that might fit in the current block...
-                match overflow.inner_alloc(alloc_size) {
-                    // the block has a suitable hole
-                    Some(space) => AllocDest::new(overflow.block_ptr(), space),
-
-                    // the block does not have a suitable hole
-                    None => {
-                        let block = Block::new(constants::BLOCK_SIZE)?;
-                        *overflow = unsafe { BumpBlock::new(block.as_ptr()) };
-
-                        self.all_blocks.insert(block.addr(), block);
-
-                        let space = overflow.inner_alloc(alloc_size).expect("Unexpected error!");
-                        AllocDest::new(overflow.block_ptr(), space)
-                    }
-                }
-            }
+            Some(overflow) => overflow,
 
             // We have no blocks to work with yet so make one
             None => {
@@ -165,10 +173,25 @@ impl BlockList {
 
                 self.overflow = Some(overflow);
 
-                AllocDest::new(block_ptr, space)
+                return Ok(AllocDest::new(block_ptr, space));
             }
         };
 
+        let dest = match overflow.inner_alloc(alloc_size) {
+            // the block has a suitable hole
+            Some(space) => AllocDest::new(overflow.block_ptr(), space),
+
+            // the block does not have a suitable hole
+            None => {
+                let new_overflow = self.pop_empty_block()?;
+                overflow = new_overflow;
+
+                let space = overflow.inner_alloc(alloc_size).expect("Unexpected error!");
+                AllocDest::new(overflow.block_ptr(), space)
+            }
+        };
+
+        self.overflow = Some(overflow);
         Ok(dest)
     }
     // ANCHOR_END: DefOverflowAlloc
@@ -432,7 +455,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     // ANCHOR_END: DefGetObject
 
     /// Run a garbage collection iteration
-    fn gc<V: TraceVisitor>(&self, tracer: &mut V) -> Result<(), GcError> {
+    fn gc<V: TraceVisitor>(&self, tracer: &mut V) -> Result<(), AllocError> {
         let blocks = unsafe { &mut *self.blocks.get() };
 
         // TODO
@@ -460,8 +483,8 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
             }
         }
 
-        // 3. recycle
-        // 4. manage blocks
+        // 3. recycle, drop, allocate blocks
+        blocks.manage_blocks()?;
 
         Ok(())
     }
