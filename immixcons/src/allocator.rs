@@ -1,15 +1,16 @@
 use crate::constants;
 use crate::rawptr::RawPtr;
 use std::mem::size_of;
+use thiserror::Error;
 
 /// An allocation error type
 // ANCHOR: DefAllocError
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Error, Copy, Clone, Debug, PartialEq)]
 pub enum AllocError {
-    /// Some attribute of the allocation, most likely the size requested,
-    /// could not be fulfilled
+    #[error("Bad allocation request: size or alignment error")]
     BadRequest,
     /// Out of memory - allocating the space failed
+    #[error("Insufficient memory to allocate object or block")]
     OOM,
 }
 // ANCHOR_END: DefAllocError

@@ -7,7 +7,6 @@
 ///
 /// Usage:
 /// ```
-/// extern crate blockalloc;
 /// use blockalloc::Block;
 ///
 /// let size = 4096;  // must be a power of 2
@@ -17,6 +16,7 @@
 /// Normal scoping rules will call Block::drop() when `block` goes out of scope
 /// causing the block to be fully deallocated.
 use std::ptr::NonNull;
+use thiserror::Error;
 
 // ANCHOR: DefBlockComponents
 pub type BlockPtr = NonNull<u8>;
@@ -25,12 +25,11 @@ pub type BlockSize = usize;
 
 /// Set of possible block allocation failures
 // ANCHOR: DefBlockError
-#[derive(Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq)]
 pub enum BlockError {
-    /// Usually means requested block size, and therefore alignment, wasn't a
-    /// power of two
+    #[error("Bad memory block request: alignment or size error")]
     BadRequest,
-    /// Insufficient memory, couldn't allocate a block
+    #[error("Insufficient memory to allocate a new block")]
     OOM,
 }
 // ANCHOR_END: DefBlockError

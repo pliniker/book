@@ -126,11 +126,13 @@ impl BlockList {
             self.empty_blocks.push(*block_addr);
         }
 
-        // check empty block count, release surplus
+        // check empty block count, release surplus or claim additional
         let empty_count = self.empty_blocks.len();
         if empty_count > constants::BLOCKS_KEEP_EMPTY_COUNT {
             let take = empty_count - constants::BLOCKS_KEEP_EMPTY_COUNT;
-            self.empty_blocks.drain(0..take);
+            self.empty_blocks.drain(0..take).for_each(|block_ptr| {
+                self.all_blocks.remove(&block_ptr);
+            });
         } else if empty_count < constants::BLOCKS_KEEP_EMPTY_COUNT {
             let additional = constants::BLOCKS_KEEP_EMPTY_COUNT - empty_count;
             for _ in 0..additional {
@@ -333,7 +335,7 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
         let mut block_meta = unsafe { BlockMeta::attach(block_base) };
 
         // 2. mark the line
-        let ptr_offset = ptr & constants::BLOCK_SIZE;
+        let ptr_offset = ptr & !constants::BLOCK_PTR_MASK;
         block_meta.mark_line(ptr_offset / constants::LINE_COUNT);
 
         // 3. mark the block

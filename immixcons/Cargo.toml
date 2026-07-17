@@ -9,3 +9,4 @@ license = "MIT OR Apache-2.0"
 blockalloc = { path = "../blockalloc/" }
 libc = "0.2"
 log = "0.4"
+thiserror = "2.0"

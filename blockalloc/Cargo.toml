@@ -5,3 +5,5 @@ authors = ["Peter Liniker <peter.liniker@gmail.com>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
+[dependencies]
+thiserror = "2.0"
