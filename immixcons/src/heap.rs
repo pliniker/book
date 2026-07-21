@@ -109,6 +109,14 @@ impl BlockList {
         self.get_new_block()
     }
 
+    // Get a recycled block, falling back to the empty block list if no suitable
+    // block exists
+    fn pop_recycled_block(&mut self) -> Result<BumpBlock, AllocError> {
+        // TODO
+        // Look for histogram-managed blocks with at least x holes
+        unimplemented!()
+    }
+
     /// Manage empty blocks and recycling blocks
     fn manage_blocks(&mut self) -> Result<(), AllocError> {
         // generate histogram
@@ -123,7 +131,7 @@ impl BlockList {
         // parse histogram:
         //  - move empty blocks to empty_blocks list
         for block_addr in self.histogram.drain_empty_blocks() {
-            self.empty_blocks.push(*block_addr);
+            self.empty_blocks.push(block_addr);
         }
 
         // check empty block count, release surplus or claim additional
@@ -146,8 +154,18 @@ impl BlockList {
         Ok(())
     }
 
+    fn reset_mark_bits(&mut self) {
+        // TODO
+        // 1. Empty blocks: clear object map
+        // 2. Other blocks:
+        //   - clear block mark bit
+        //   - for unmarked lines, clear object map bits
+        //   - for marked lines:
+        //     - clear line mark
+        //     - for objects in line, clear object mark bit
+    }
+
     /// Allocate a space for a medium object into an overflow block
-    // TODO this just allocates a new block on demand, but should look at the free block list first
     // ANCHOR: DefOverflowAlloc
     fn find_overflow_space(&mut self, alloc_size: usize) -> Result<AllocDest, AllocError> {
         assert!(alloc_size <= constants::BLOCK_CAPACITY);
@@ -161,11 +179,8 @@ impl BlockList {
 
             // We have no blocks to work with yet so make one
             None => {
-                let block = Block::new(constants::BLOCK_SIZE)?;
-                let mut overflow = unsafe { BumpBlock::new(block.as_ptr()) };
-                let block_ptr = block.as_ptr();
-
-                self.all_blocks.insert(block.addr(), block);
+                let mut overflow = self.pop_empty_block()?;
+                let block_ptr = overflow.block_ptr();
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation
@@ -227,6 +242,7 @@ impl BlockList {
 
                     // the block does not have a suitable hole so allocate a new head block
                     None => {
+                        // TODO use pop_recycled_block()
                         let block = Block::new(constants::BLOCK_SIZE)?;
                         *head = unsafe { BumpBlock::new(block.as_ptr()) };
 
@@ -240,6 +256,7 @@ impl BlockList {
 
             // We have no blocks to work with yet so make one
             None => {
+                // TODO use pop_recycled_block()
                 let block = Block::new(constants::BLOCK_SIZE)?;
                 let mut head = unsafe { BumpBlock::new(block.as_ptr()) };
                 let block_ptr = block.as_ptr();
@@ -336,7 +353,7 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
 
         // 2. mark the line
         let ptr_offset = ptr & !constants::BLOCK_PTR_MASK;
-        block_meta.mark_line(ptr_offset / constants::LINE_COUNT);
+        block_meta.mark_line(ptr_offset / constants::LINE_SIZE);
 
         // 3. mark the block
         block_meta.mark_block();

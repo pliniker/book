@@ -19,21 +19,26 @@ impl Histogram {
     }
 
     pub fn pop_top(&mut self) -> Option<usize> {
-        if let Some(mut entry) = self.gram.last_entry() {
-            return entry.get_mut().pop();
+        let mut entry = self.gram.last_entry()?;
+        let block_list = entry.get_mut();
+        let block_id = block_list.pop();
+
+        if block_list.is_empty() {
+            entry.remove_entry();
         }
-        None
+
+        block_id
     }
 
     pub fn push_block(&mut self, holes: usize, block: usize) {
         self.gram.entry(holes).or_insert(Vec::new()).push(block);
     }
 
-    pub fn drain_empty_blocks(&mut self) -> std::slice::IterMut<'_, usize> {
+    pub fn drain_empty_blocks(&mut self) -> std::vec::Drain<'_, usize> {
         self.gram
             .entry(constants::LINE_COUNT)
             .or_default()
-            .into_iter()
+            .drain(0..)
     }
 
     pub fn clear(&mut self) {

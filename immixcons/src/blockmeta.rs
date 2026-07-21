@@ -227,7 +227,7 @@ impl BlockMeta {
 mod tests {
 
     use super::*;
-    use crate::blockalloc::Block;
+    use blockalloc::Block;
 
     #[test]
     fn test_find_next_hole() {

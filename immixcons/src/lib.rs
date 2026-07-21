@@ -1,7 +1,3 @@
-extern crate blockalloc;
-extern crate libc;
-extern crate log;
-
 mod allocator;
 mod blockmeta;
 mod bumpblock;

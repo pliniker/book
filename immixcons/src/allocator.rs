@@ -71,7 +71,6 @@ impl SizeClass {
 /// The type that describes the bounds of array sizing
 pub type ArraySize = u32;
 
-/// TODO Object mark bit.
 /// Every object is `Allocated` on creation.
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -123,7 +122,7 @@ pub trait AllocHeader: Sized {
 
     /// Get the header size, to the next allocator-aligned number of bytes
     fn header_size() -> usize {
-        size_of::<Self>() + (constants::ALLOC_ALIGN_BYTES - 1) & !(constants::ALLOC_ALIGN_BYTES - 1)
+        size_of::<Self>().next_multiple_of(constants::ALLOC_ALIGN_BYTES)
     }
 
     /// This constant needs to be set to be able to mask out tagged pointer tag bits
