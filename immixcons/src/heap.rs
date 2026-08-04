@@ -120,8 +120,6 @@ impl BlockList {
     /// Manage empty blocks and recycling blocks
     fn manage_blocks(&mut self) -> Result<(), AllocError> {
         // generate histogram
-        self.histogram.clear();
-
         for (block_addr, block) in self.all_blocks.iter() {
             let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
             let holes = meta.count_holes();
@@ -129,9 +127,18 @@ impl BlockList {
         }
 
         // parse histogram:
-        //  - move empty blocks to empty_blocks list
+        //  - move empty blocks to empty_blocks list and reset them to an empty state
         for block_addr in self.histogram.drain_empty_blocks() {
-            self.empty_blocks.push(block_addr);
+            if !self.empty_blocks.contains(&block_addr) {
+                self.empty_blocks.push(block_addr);
+                // Empty blocks: clear object map.
+                // lines etc shouldn't need to be cleared since this is an empty block
+                self.all_blocks.entry(block_addr).and_modify(|block| {
+                    // reset block metadata via `new()`, resetting the block to
+                    // new block state
+                    let _bump = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+                });
+            }
         }
 
         // check empty block count, release surplus or claim additional
@@ -154,15 +161,28 @@ impl BlockList {
         Ok(())
     }
 
-    fn reset_mark_bits(&mut self) {
-        // TODO
-        // 1. Empty blocks: clear object map
-        // 2. Other blocks:
-        //   - clear block mark bit
-        //   - for unmarked lines, clear object map bits
-        //   - for marked lines:
-        //     - clear line mark
-        //     - for objects in line, clear object mark bit
+    /// Reset all block state:
+    /// - holes histogram
+    /// - block, line, object mark bits
+    fn reset_block_gc_state(&mut self) {
+        // Reset the histogram
+        self.histogram.clear();
+
+        // Empty blocks: clear object map.
+        // lines etc shouldn't need to be cleared since this is an empty block
+        for block_ptr in self.empty_blocks.iter() {
+            self.all_blocks.entry(*block_ptr).and_modify(|block| {
+                // reset block metadata via `new()`
+                let _bump = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+            });
+        }
+
+        // Occupied blocks only:
+        // - clear block mark bit
+        // - for unmarked lines, clear object map bits
+        // - for marked lines:
+        //   - clear line mark
+        //   - for objects in line, clear object mark bit
     }
 
     /// Allocate a space for a medium object into an overflow block
@@ -477,32 +497,31 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
     fn gc<V: TraceVisitor>(&self, tracer: &mut V) -> Result<(), AllocError> {
         let blocks = unsafe { &mut *self.blocks.get() };
 
-        // TODO
-        // - reset line and block mark bits
+        // 1. reset line and block mark bits
+        blocks.reset_block_gc_state();
 
-        // 1. stack scan for things that could be pointers into the heap
+        // 2. stack scan for things that could be pointers into the heap
         let mut stack_scan = Vec::new();
         self.stack.scan(&mut stack_scan, |ptr| {
             blocks.is_conservatively_a_ptr(ptr & Self::Header::TAG_MASK)
         });
 
-        // 2. trace
-
-        // 2.1 trace the stack scan
+        // 3. trace
+        // 3.1 trace the stack scan
         for ptr in stack_scan.iter() {
             if !unsafe { Self::mark(*ptr) } {
                 tracer.visit(RawPtr::new(*ptr as *const ()));
             }
         }
 
-        // 2.2 trace the heap scan
+        // 3.2 trace the heap
         while let Some(object) = tracer.pop() {
             if !unsafe { Self::mark(object.addr()) } {
                 tracer.visit(object);
             }
         }
 
-        // 3. recycle, drop, allocate blocks
+        // 4. recycle, drop, allocate blocks
         blocks.manage_blocks()?;
 
         Ok(())

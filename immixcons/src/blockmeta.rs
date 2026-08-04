@@ -16,7 +16,7 @@ impl BlockMeta {
     /// metadata has already been initialized. This does NOT reset any metadata
     /// (unlike `BlockMeta::new`), and so is appropriate for reading/updating
     /// metadata for an existing block.
-    pub unsafe fn new(block_ptr: *const u8) -> BlockMeta {
+    pub unsafe fn attach_and_reset(block_ptr: *const u8) -> BlockMeta {
         let mut meta = BlockMeta {
             lines: unsafe { block_ptr.add(constants::LINE_MARK_START) as *mut u8 },
             object_map: unsafe { block_ptr.add(constants::OBJECT_MAP_START) as *mut u8 },
@@ -64,7 +64,7 @@ impl BlockMeta {
     }
 
     /// Reset all mark flags to unmarked.
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         unsafe {
             for i in 0..constants::LINE_COUNT {
                 *self.lines.add(i) = 0;
@@ -235,7 +235,7 @@ mod tests {
         // The first hole should be seen as conservatively marked.
         // The second hole should be the one selected.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         meta.mark_line(0);
         meta.mark_line(1);
@@ -257,7 +257,7 @@ mod tests {
     fn test_find_next_hole_at_line_zero() {
         // Should find the hole starting at the beginning of the block
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         meta.mark_line(3);
         meta.mark_line(4);
@@ -277,7 +277,7 @@ mod tests {
         // The first half of the block is marked.
         // The second half of the block should be identified as a hole.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         let halfway = constants::LINE_COUNT / 2;
 
@@ -300,7 +300,7 @@ mod tests {
         // Every other line is marked.
         // No hole should be found.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
@@ -319,7 +319,7 @@ mod tests {
     fn test_find_entire_block() {
         // No marked lines. Entire block is available.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         let expect = Some((constants::BLOCK_CAPACITY, 0));
         let got = meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE);
@@ -333,7 +333,7 @@ mod tests {
     fn test_object_map_mark_and_check() {
         // Test marking and checking individual object slots
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         // Initially, no objects should be marked
         assert!(!meta.is_object_marked(0));
@@ -360,7 +360,7 @@ mod tests {
     fn test_object_map_clear() {
         // Test clearing marked objects
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         let offset = constants::ALLOC_ALIGN_BYTES * 10;
 
@@ -377,7 +377,7 @@ mod tests {
     fn test_object_map_find_next() {
         // Test finding marked objects
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         // Mark objects at various positions
         meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
@@ -405,7 +405,7 @@ mod tests {
     fn test_object_map_reset() {
         // Test that reset clears the object map
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         // Mark several objects
         for i in 0..10 {
@@ -433,7 +433,7 @@ mod tests {
     fn test_object_map_dense_marking() {
         // Test marking many consecutive objects
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         let num_objects = 100;
 
@@ -463,7 +463,7 @@ mod tests {
         // Ensure that attaching to an existing block does not reset metadata and
         // that mutations via an attached meta are visible to the original meta.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta1 = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta1 = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         meta1.mark_line(2);
         meta1.mark_object(constants::ALLOC_ALIGN_BYTES * 7);
@@ -493,7 +493,7 @@ mod tests {
     fn test_mark_block_sets_last_line() {
         // mark_block should set the last line byte in the line marks region
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         meta.mark_block();
 
@@ -509,7 +509,7 @@ mod tests {
     fn test_reset_clears_line_marks() {
         // Reset should clear marked lines as well as object map
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         meta.mark_line(0);
         meta.mark_line(10);
@@ -530,7 +530,7 @@ mod tests {
     fn test_mark_object_unaligned_panics() {
         // mark_object should assert on unaligned offsets (debug build)
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         // Unaligned offset should trigger debug_assert
         meta.mark_object(constants::ALLOC_ALIGN_BYTES - 1);
@@ -542,7 +542,7 @@ mod tests {
     fn test_clear_object_out_of_bounds_panics() {
         // clear_object asserts if offset is outside block capacity
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         // offset equal to BLOCK_CAPACITY should be out-of-bounds
         meta.clear_object(constants::BLOCK_CAPACITY);
@@ -553,7 +553,7 @@ mod tests {
         // is_object_marked should report the slot as marked even if the offset
         // passed is not aligned (it divides by ALLOC_ALIGN_BYTES).
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         let base = constants::ALLOC_ALIGN_BYTES * 3;
         meta.mark_object(base);
@@ -566,7 +566,7 @@ mod tests {
     fn test_find_next_object_with_unaligned_start() {
         // find_next_object should accept an unaligned starting offset
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
 
@@ -581,7 +581,7 @@ mod tests {
         // encountered with count == lines_required (so the block should not be
         // returned), and a subsequent larger run results in a proper hole.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         let starting_line = 10;
         let starting_at = starting_line * constants::LINE_SIZE;

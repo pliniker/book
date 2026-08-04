@@ -19,7 +19,7 @@ pub struct BumpBlock {
 impl BumpBlock {
     /// Start working with a new block, wiping lines and object map clean
     pub unsafe fn new(block: *const u8) -> BumpBlock {
-        unsafe { BlockMeta::new(block) };
+        unsafe { BlockMeta::attach_and_reset(block) };
         BumpBlock {
             cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
             limit: block,
@@ -142,7 +142,7 @@ mod tests {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         // This block has an available hole as the second half of the block
         let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         for i in 0..(constants::LINE_COUNT / 2) {
             meta.mark_line(i);
@@ -166,7 +166,7 @@ mod tests {
 
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
@@ -187,7 +187,7 @@ mod tests {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
 
         // Initialize metadata and mark a line
-        let mut meta = unsafe { BlockMeta::new(block.as_ptr()) };
+        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
         meta.mark_line(3);
 
         // Attach to the block (should not reset metadata)
