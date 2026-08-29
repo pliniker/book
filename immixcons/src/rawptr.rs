@@ -13,7 +13,7 @@ impl<T: Sized> RawPtr<T> {
     /// Create a new RawPtr from a bare pointer
     pub fn new(ptr: *const T) -> RawPtr<T> {
         RawPtr {
-            ptr: unsafe { NonNull::new_unchecked(ptr as *mut T) },
+            ptr: NonNull::new(ptr as *mut T).expect("Reconstructed RawPtr<T> from a null value!"),
         }
     }
 

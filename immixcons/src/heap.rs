@@ -114,7 +114,7 @@ impl BlockList {
     fn pop_recycled_block(&mut self) -> Result<BumpBlock, AllocError> {
         // TODO
         // Look for histogram-managed blocks with at least x holes
-        unimplemented!()
+        self.pop_empty_block()
     }
 
     /// Manage empty blocks and recycling blocks
@@ -198,20 +198,7 @@ impl BlockList {
             Some(overflow) => overflow,
 
             // We have no blocks to work with yet so make one
-            None => {
-                let mut overflow = self.pop_empty_block()?;
-                let block_ptr = overflow.block_ptr();
-
-                // earlier check for object size < block size should
-                // mean we dont fail this expectation
-                let space = overflow
-                    .inner_alloc(alloc_size)
-                    .expect("We expected this object to fit!");
-
-                self.overflow = Some(overflow);
-
-                return Ok(AllocDest::new(block_ptr, space));
-            }
+            None => self.pop_empty_block()?,
         };
 
         let dest = match overflow.inner_alloc(alloc_size) {
@@ -231,11 +218,9 @@ impl BlockList {
         self.overflow = Some(overflow);
         Ok(dest)
     }
+
     // ANCHOR_END: DefOverflowAlloc
     /// Find a space for a small, medium or large object
-
-    // TODO this just allocates a new block, but should look at
-    // recycled blocks first
     fn find_space(
         &mut self,
         alloc_size: usize,
@@ -247,54 +232,33 @@ impl BlockList {
             return Err(AllocError::BadRequest);
         }
 
-        let dest = match self.head {
-            // We already have a block to try to use...
-            Some(ref mut head) => {
-                // If this is a medium object that doesn't fit in the hole, use overflow
-                if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
-                    return self.find_overflow_space(alloc_size);
-                }
+        let mut head = match self.head.take() {
+            Some(head) => head,
+            // TODO we need to recycle partially used blocks too
+            None => self.pop_recycled_block()?,
+        };
 
-                // This is a small object that might fit in the current block...
-                match head.inner_alloc(alloc_size) {
-                    // the block has a suitable hole
-                    Some(space) => AllocDest::new(head.block_ptr(), space),
+        if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
+            return self.find_overflow_space(alloc_size);
+        }
 
-                    // the block does not have a suitable hole so allocate a new head block
-                    None => {
-                        // TODO use pop_recycled_block()
-                        let block = Block::new(constants::BLOCK_SIZE)?;
-                        *head = unsafe { BumpBlock::new(block.as_ptr()) };
+        let dest = match head.inner_alloc(alloc_size) {
+            // the block has a suitable hole
+            Some(space) => AllocDest::new(head.block_ptr(), space),
 
-                        self.all_blocks.insert(block.addr(), block);
-
-                        let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
-                        AllocDest::new(head.block_ptr(), space)
-                    }
-                }
-            }
-
-            // We have no blocks to work with yet so make one
+            // the block does not have a suitable hole
             None => {
-                // TODO use pop_recycled_block()
-                let block = Block::new(constants::BLOCK_SIZE)?;
-                let mut head = unsafe { BumpBlock::new(block.as_ptr()) };
-                let block_ptr = block.as_ptr();
+                let new_head = self.pop_empty_block()?;
+                head = new_head;
 
-                self.all_blocks.insert(block.addr(), block);
-
-                // earlier check for object size < block size should
-                // mean we dont fail this expectation
                 let space = head
                     .inner_alloc(alloc_size)
-                    .expect("We expected this object to fit!");
-
-                self.head = Some(head);
-
-                AllocDest::new(block_ptr, space)
+                    .expect("Object does not fit in block!");
+                AllocDest::new(head.block_ptr(), space)
             }
         };
 
+        self.head = Some(head);
         Ok(dest)
     }
 
