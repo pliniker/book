@@ -13,13 +13,24 @@ impl<T: Sized> RawPtr<T> {
     /// Create a new RawPtr from a bare pointer
     pub fn new(ptr: *const T) -> RawPtr<T> {
         RawPtr {
-            ptr: unsafe { NonNull::new_unchecked(ptr as *mut T) },
+            ptr: NonNull::new(ptr as *mut T).expect("Reconstructed RawPtr<T> from a null value!"),
         }
+    }
+
+    /// Create a new RawPtr from a NonNull<T> pointer.
+    /// This is preferred whenever possible.
+    pub fn from_nonnull(ptr: NonNull<T>) -> RawPtr<T> {
+        RawPtr { ptr }
     }
 
     /// Get the raw `*const` pointer to the object.
     pub fn as_ptr(self) -> *const T {
         self.ptr.as_ptr()
+    }
+
+    /// Get the inner NonNull<T> pointer
+    pub fn as_nonnull(self) -> NonNull<T> {
+        self.ptr
     }
 
     /// Get the pointer value as a word-sized integer

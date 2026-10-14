@@ -1,7 +1,7 @@
 use libc::{getcontext, pthread_attr_getstack, pthread_getattr_np, pthread_self};
 use log::trace;
-use std::mem::{size_of, MaybeUninit};
-use std::pin::{pin, Pin};
+use std::mem::{MaybeUninit, size_of};
+use std::pin::{Pin, pin};
 use std::slice::from_raw_parts;
 
 /// Stack growth orientation
@@ -47,10 +47,12 @@ impl SystemStackInfo {
         let some_local: usize = 0;
         let orientation = Self::stack_orientation(&some_local);
 
-        let stack_start = if orientation == Grows::Down {
-            unsafe { stack_base.assume_init() as usize + stack_size.assume_init() as usize }
-        } else {
-            unsafe { stack_base.assume_init() as usize }
+        let stack_start = unsafe {
+            if orientation == Grows::Down {
+                stack_base.assume_init() as usize + stack_size.assume_init() as usize
+            } else {
+                stack_base.assume_init() as usize
+            }
         };
 
         SystemStackInfo {

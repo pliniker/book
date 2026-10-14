@@ -35,6 +35,13 @@ pub enum BlockError {
 // ANCHOR_END: DefBlockError
 
 /// A block-size-aligned block of memory
+///
+/// Ownership model: `Block::new(size)` will allocate a new block of memory.
+/// The object is _not_ `Copy + Clone` so move-only semantics apply.
+/// `Block::drop(self)` will deallocate the memory.
+///
+/// For reconstructing an existing `Block` from a raw base pointer, see
+/// `UnsafeBlock`.
 // ANCHOR: DefBlock
 pub struct Block {
     ptr: BlockPtr,
@@ -56,11 +63,6 @@ impl Block {
     }
     // ANCHOR_END: BlockNew
 
-    /// Consume and return the pointer only
-    pub fn into_mut_ptr(self) -> BlockPtr {
-        self.ptr
-    }
-
     /// Return the size in bytes of the block
     pub fn size(&self) -> BlockSize {
         self.size
@@ -75,8 +77,8 @@ impl Block {
 
     /// Return a bare pointer to the base of the block
     // ANCHOR: BlockAsPtr
-    pub fn as_ptr(&self) -> *const u8 {
-        self.ptr.as_ptr()
+    pub fn as_ptr(&self) -> BlockPtr {
+        self.ptr
     }
     // ANCHOR_END: BlockAsPtr
 

@@ -1,7 +1,11 @@
+use std::num::NonZero;
 use std::ptr::write;
+
+use blockalloc::BlockPtr;
 
 use crate::blockmeta::BlockMeta;
 use crate::constants;
+use crate::types::BlockHandle;
 
 /// Safe abstraction around allocating into a block: maintaining a write
 /// cursor and allocation extents; includes the lines and object map
@@ -10,68 +14,75 @@ use crate::constants;
 /// around a current block.
 // ANCHOR: DefBumpBlock
 pub struct BumpBlock {
-    cursor: *const u8,
-    limit: *const u8,
-    block: *const u8,
+    block: BlockHandle,
+    cursor: BlockPtr,
+    limit: BlockPtr,
+    meta: BlockMeta,
 }
 // ANCHOR_END: DefBumpBlock
 
 impl BumpBlock {
     /// Start working with a new block, wiping lines and object map clean
-    pub unsafe fn new(block: *const u8) -> BumpBlock {
-        unsafe { BlockMeta::attach_and_reset(block) };
+    pub fn new(block: BlockHandle) -> BumpBlock {
         BumpBlock {
-            cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
-            limit: block,
             block: block,
+            cursor: block.offset(constants::BLOCK_CAPACITY),
+            limit: block.base(),
+            meta: BlockMeta::attach_and_reset(block),
         }
     }
 
     /// Attach to an existing Block, making no modifications
-    pub unsafe fn attach(block: *const u8) -> BumpBlock {
+    pub fn attach(block: BlockHandle) -> BumpBlock {
         BumpBlock {
-            cursor: unsafe { block.add(constants::BLOCK_CAPACITY) },
-            limit: block,
             block: block,
+            cursor: block.offset(constants::BLOCK_CAPACITY),
+            limit: block.base(),
+            meta: BlockMeta::attach(block),
         }
     }
 
     /// Write an object into the block at the given offset. The offset is not
     /// checked for overflow, hence this function is unsafe.
     unsafe fn write<T>(&mut self, object: T, offset: usize) -> *const T {
+        let p = self.block.offset(offset).as_ptr() as *mut T;
         unsafe {
-            let p = self.block.add(offset) as *mut T;
             write(p, object);
-            p
         }
+        p
     }
 
     /// Find a hole of at least the requested size and return Some(pointer) to it, or
     /// None if this block doesn't have a big enough hole.
     // ANCHOR: DefBumpBlockAlloc
-    pub fn inner_alloc(&mut self, alloc_size: usize) -> Option<*const u8> {
-        let ptr = self.cursor as usize;
-        let limit = self.limit as usize;
+    pub fn inner_alloc(&mut self, alloc_size: usize) -> Option<BlockPtr> {
+        let ptr = self.cursor;
+        let limit = self.limit;
 
-        let next_ptr = ptr.checked_sub(alloc_size)? & constants::ALLOC_ALIGN_MASK;
+        let next_ptr = unsafe {
+            ptr.sub(alloc_size).map_addr(|p| {
+                let masked_p = p.get() & constants::ALLOC_ALIGN_MASK;
+                NonZero::new_unchecked(masked_p)
+            })
+        };
 
         if next_ptr < limit {
-            let block_relative_limit = (self.limit as usize) - (self.block as usize);
+            let block_relative_limit = self.block.byte_count_to(self.limit);
 
             if block_relative_limit > 0 {
-                let meta = unsafe { BlockMeta::attach(self.block) };
-                if let Some((cursor, limit)) =
-                    meta.find_next_available_hole(block_relative_limit, alloc_size)
+                if let Some((cursor, limit)) = self
+                    .meta
+                    .find_next_available_hole(block_relative_limit, alloc_size)
                 {
-                    self.cursor = unsafe { self.block.add(cursor) };
-                    self.limit = unsafe { self.block.add(limit) };
+                    self.cursor = self.block.offset(cursor);
+                    self.limit = self.block.offset(limit);
                     return self.inner_alloc(alloc_size);
                 }
             }
 
             None
         } else {
-            self.cursor = next_ptr as *const u8;
+            self.cursor = next_ptr;
             Some(self.cursor)
         }
     }
@@ -79,11 +90,11 @@ impl BumpBlock {
 
     /// Return the size of the hole we're positioned at
     pub fn current_hole_size(&self) -> usize {
-        self.cursor as usize - self.limit as usize
+        unsafe { self.cursor.offset_from_unsigned(self.limit) }
     }
 
     /// Return the block pointer we're working with
-    pub fn block_ptr(&self) -> *const u8 {
+    pub fn block_ptr(&self) -> BlockHandle {
         self.block
     }
 }
@@ -106,7 +117,7 @@ mod tests {
         let mut index = 0;
 
         while let Some(ptr) = b.inner_alloc(TEST_UNIT_SIZE) {
-            let u32ptr = ptr as *mut u32;
+            let u32ptr = ptr.as_ptr() as *mut u32;
 
             assert!(!v.contains(&u32ptr));
 
@@ -128,7 +139,8 @@ mod tests {
     #[test]
     fn test_empty_block() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
+        let handle = BlockHandle::new(&block);
+        let mut b = BumpBlock::new(handle);
 
         let count = loop_check_allocate(&mut b);
         let expect = constants::BLOCK_CAPACITY / TEST_UNIT_SIZE;
@@ -140,12 +152,12 @@ mod tests {
     #[test]
     fn test_half_block() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let handle = BlockHandle::new(&block);
         // This block has an available hole as the second half of the block
-        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
-        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+        let mut b = BumpBlock::new(handle);
 
         for i in 0..(constants::LINE_COUNT / 2) {
-            meta.mark_line(i);
+            b.meta.mark_line(i);
         }
         let occupied_bytes = (constants::LINE_COUNT / 2) * constants::LINE_SIZE;
 
@@ -165,12 +177,12 @@ mod tests {
         // marked. Nothing should be allocated in this block.
 
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
-        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+        let handle = BlockHandle::new(&block);
+        let mut b = BumpBlock::new(handle);
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
-                meta.mark_line(i);
+                b.meta.mark_line(i);
             }
         }
 
@@ -185,30 +197,32 @@ mod tests {
     #[test]
     fn test_attach_preserves_metadata_and_block_properties() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
+        let handle = BlockHandle::new(&block);
 
         // Initialize metadata and mark a line
-        let mut meta = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+        let mut meta = BlockMeta::attach_and_reset(handle);
         meta.mark_line(3);
 
         // Attach to the block (should not reset metadata)
-        let b = unsafe { BumpBlock::attach(block.as_ptr()) };
+        let b = BumpBlock::attach(handle);
 
         // block pointer should be correct
-        assert_eq!(b.block_ptr(), block.as_ptr());
+        assert_eq!(b.block_ptr().base(), block.as_ptr());
 
         // initial hole should be the entire block
         assert_eq!(b.current_hole_size(), constants::BLOCK_CAPACITY);
 
         // verify the line mark we set earlier is still present
         let raw = block.as_ptr();
-        let line_mark = unsafe { *raw.add(constants::LINE_MARK_START + 3) };
+        let line_mark = unsafe { *raw.add(constants::LINE_MARK_START + 3).as_ref() };
         assert_eq!(line_mark, 1);
     }
 
     #[test]
     fn test_write_writes_at_offset() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut b = unsafe { BumpBlock::new(block.as_ptr()) };
+        let handle = BlockHandle::new(&block);
+        let mut b = BumpBlock::new(handle);
 
         // Write a u32 at offset 0
         unsafe {
@@ -227,7 +241,8 @@ mod tests {
     #[test]
     fn test_attach_write_monomorphization() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
-        let mut b = unsafe { BumpBlock::attach(block.as_ptr()) };
+        let handle = BlockHandle::new(&block);
+        let mut b = BumpBlock::attach(handle);
 
         unsafe {
             // u32 write via attached bump block

@@ -1,5 +1,35 @@
 # Notes
 
+## Self talk
+
+ImmixConsHeap<H: Header>
+- BlockList
+  - head: BumpBlock
+    - BlockMeta
+      - block ptr
+      - object map ptr
+      - line mark ptr
+    - block ptr
+    - cursor ptr
+    - limit ptr
+  - overflow: BumpBlock
+    - block ptr
+    - cursor ptr
+    - limit ptr
+  - empty_blocks: list of usize (keys into blocks)
+  - blocks: Map<usize, Block>
+  - histogram
+
+- BlockList owns the Blocks.
+- No Block can escape the scope of BlockList
+- BlockMeta and BumpBlock "borrow" from BlockList
+  - or, have raw pointers into A Block
+- No Block should be deallocated that is borrowed
+
+Block
+BlockHandle
+
+
 ## TODOs
 
 ImmixCons:
@@ -23,7 +53,7 @@ ImmixCons:
 - [ ] back pressure on allocation, triggering gc
 - [ ] large objects
 
-Interpreter improvements:
+## Interpreter improvements:
 
 - [ ] replace Pairs with Arrays in parser and compiler
 - [ ] additional types: integers, arbitrary sized integers

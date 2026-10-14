@@ -1,9 +1,8 @@
-use log::trace;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::ptr::write;
+use std::ptr::{NonNull, write};
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
@@ -15,7 +14,9 @@ use crate::constants;
 use crate::histogram::Histogram;
 use crate::rawptr::RawPtr;
 use crate::stack::SystemStackInfo;
-use blockalloc::{Block, BlockError};
+use crate::types::BlockHandle;
+
+use blockalloc::{Block, BlockError, BlockPtr};
 
 impl From<BlockError> for AllocError {
     fn from(error: BlockError) -> AllocError {
@@ -29,37 +30,13 @@ impl From<BlockError> for AllocError {
 /// Return value of finding a space to allocate into
 #[derive(Copy, Clone)]
 struct AllocDest {
-    block: *const u8,
-    space: *const u8,
+    block: BlockHandle,
+    space: BlockPtr,
 }
 
 impl AllocDest {
-    fn new(block: *const u8, space: *const u8) -> AllocDest {
+    fn new(block: BlockHandle, space: BlockPtr) -> AllocDest {
         AllocDest { block, space }
-    }
-}
-
-/// Structure for collecting pointers across the heap during tracing
-pub struct HeapTracer {
-    visited: Vec<RawPtr<()>>,
-}
-
-impl HeapTracer {
-    pub fn new() -> HeapTracer {
-        HeapTracer {
-            visited: Vec::new(),
-        }
-    }
-}
-
-impl TraceVisitor for HeapTracer {
-    fn visit(&mut self, object: RawPtr<()>) {
-        trace!("[heap_scan] {:x}", object.addr());
-        self.visited.push(object);
-    }
-
-    fn pop(&mut self) -> Option<RawPtr<()>> {
-        self.visited.pop()
     }
 }
 
@@ -91,7 +68,8 @@ impl BlockList {
     // Allocate a block and add it to the storage bank
     fn get_new_block(&mut self) -> Result<BumpBlock, AllocError> {
         let block = Block::new(constants::BLOCK_SIZE)?;
-        let bumpblock = unsafe { BumpBlock::new(block.as_ptr()) };
+        let handle = BlockHandle::new(&block);
+        let bumpblock = BumpBlock::new(handle);
         self.all_blocks.insert(block.addr(), block);
         Ok(bumpblock)
     }
@@ -101,7 +79,8 @@ impl BlockList {
     fn pop_empty_block(&mut self) -> Result<BumpBlock, AllocError> {
         if let Some(block_base) = self.empty_blocks.pop() {
             if let Some(block) = self.all_blocks.get(&block_base) {
-                return Ok(unsafe { BumpBlock::new(block.as_ptr()) });
+                let handle = BlockHandle::new(block);
+                return Ok(BumpBlock::new(handle));
             }
         }
 
@@ -121,7 +100,8 @@ impl BlockList {
     fn manage_blocks(&mut self) -> Result<(), AllocError> {
         // generate histogram
         for (block_addr, block) in self.all_blocks.iter() {
-            let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
+            let handle = BlockHandle::new(block);
+            let meta = BlockMeta::attach(handle);
             let holes = meta.count_holes();
             self.histogram.push_block(holes, *block_addr);
         }
@@ -136,7 +116,8 @@ impl BlockList {
                 self.all_blocks.entry(block_addr).and_modify(|block| {
                     // reset block metadata via `new()`, resetting the block to
                     // new block state
-                    let _bump = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+                    let handle = BlockHandle::new(block);
+                    let _bump = BlockMeta::attach_and_reset(handle);
                 });
             }
         }
@@ -146,6 +127,7 @@ impl BlockList {
         if empty_count > constants::BLOCKS_KEEP_EMPTY_COUNT {
             let take = empty_count - constants::BLOCKS_KEEP_EMPTY_COUNT;
             self.empty_blocks.drain(0..take).for_each(|block_ptr| {
+                // will drop the Block
                 self.all_blocks.remove(&block_ptr);
             });
         } else if empty_count < constants::BLOCKS_KEEP_EMPTY_COUNT {
@@ -173,7 +155,8 @@ impl BlockList {
         for block_ptr in self.empty_blocks.iter() {
             self.all_blocks.entry(*block_ptr).and_modify(|block| {
                 // reset block metadata via `new()`
-                let _bump = unsafe { BlockMeta::attach_and_reset(block.as_ptr()) };
+                let handle = BlockHandle::new(block);
+                let _bump = BlockMeta::attach_and_reset(handle);
             });
         }
 
@@ -264,7 +247,8 @@ impl BlockList {
                     None => {
                         // TODO use pop_recycled_block()
                         let block = Block::new(constants::BLOCK_SIZE)?;
-                        *head = unsafe { BumpBlock::new(block.as_ptr()) };
+                        let handle = BlockHandle::new(&block);
+                        *head = BumpBlock::new(handle);
 
                         self.all_blocks.insert(block.addr(), block);
 
@@ -278,8 +262,8 @@ impl BlockList {
             None => {
                 // TODO use pop_recycled_block()
                 let block = Block::new(constants::BLOCK_SIZE)?;
-                let mut head = unsafe { BumpBlock::new(block.as_ptr()) };
-                let block_ptr = block.as_ptr();
+                let handle = BlockHandle::new(&block);
+                let mut head = BumpBlock::new(handle);
 
                 self.all_blocks.insert(block.addr(), block);
 
@@ -291,7 +275,7 @@ impl BlockList {
 
                 self.head = Some(head);
 
-                AllocDest::new(block_ptr, space)
+                AllocDest::new(handle, space)
             }
         };
 
@@ -310,12 +294,32 @@ impl BlockList {
 
         if let Some(ref block) = self.all_blocks.get(&block_base) {
             let block_offset = ptr & !constants::BLOCK_PTR_MASK;
-            let meta = unsafe { BlockMeta::attach(block.as_ptr()) };
+            let handle = BlockHandle::new(block);
+            let meta = BlockMeta::attach(handle);
             if block_offset < constants::ALLOC_UPPER_EXTENT && meta.is_object_marked(block_offset) {
                 return Some(ptr);
             }
         }
         None
+    }
+
+    /// This function takes care of marking block object line attributes
+    ///
+    /// Safety:
+    /// Assumes that the provided address is a valid object in a valid block. That's
+    /// obviously a leap, so this is unsafe.
+    unsafe fn mark(&self, addr: usize) {
+        let block_base = NonNull::new((addr & constants::BLOCK_PTR_MASK) as *mut u8)
+            .expect("Resolved block base from pointer: should not be null!");
+        let handle = unsafe { BlockHandle::from_any_ptr(block_base) };
+        let mut block_meta = BlockMeta::attach(handle);
+
+        // 1. mark the line
+        let ptr_offset = addr & !constants::BLOCK_PTR_MASK;
+        block_meta.mark_line(ptr_offset / constants::LINE_SIZE);
+
+        // 2. mark the block
+        block_meta.mark_block();
     }
 }
 
@@ -357,7 +361,7 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
     ///
     /// Returns true if the object was already marked; otherwise false if it
     /// was never seen in the current mark iteration.
-    unsafe fn mark(ptr: usize) -> bool {
+    unsafe fn mark(blocks: &BlockList, ptr: usize) -> bool {
         // 1. mark the object
         let header_ptr = Self::get_header(RawPtr::new(ptr as *mut ()));
         unsafe {
@@ -366,17 +370,9 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
                 return true;
             }
             header.mark(Mark::Marked);
+
+            blocks.mark(ptr);
         }
-
-        let block_base = (ptr & constants::BLOCK_PTR_MASK) as *const u8;
-        let mut block_meta = unsafe { BlockMeta::attach(block_base) };
-
-        // 2. mark the line
-        let ptr_offset = ptr & !constants::BLOCK_PTR_MASK;
-        block_meta.mark_line(ptr_offset / constants::LINE_SIZE);
-
-        // 3. mark the block
-        block_meta.mark_block();
 
         false
     }
@@ -408,24 +404,22 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 
         // write the header into the front of the allocated space
         unsafe {
-            write(dest.space as *mut Self::Header, header);
+            write(dest.space.as_ptr() as *mut Self::Header, header);
         }
 
         // write the object into the allocated space after the header
         let object_space = unsafe { dest.space.add(header_size) };
         unsafe {
-            write(object_space as *mut T, object);
+            write(object_space.as_ptr() as *mut T, object);
         }
 
         // Mark this object in the block's object map
-        let object_offset = object_space.addr() - dest.block.addr();
-        unsafe {
-            let mut meta = BlockMeta::attach(dest.block);
-            meta.mark_object(object_offset);
-        }
+        let object_offset = dest.block.byte_count_to(object_space);
+        let mut meta = BlockMeta::attach(dest.block);
+        meta.mark_object(object_offset);
 
         // return a pointer to the object in the allocated space
-        Ok(RawPtr::new(object_space as *const T))
+        Ok(RawPtr::from_nonnull(object_space.cast::<T>()))
     }
     // ANCHOR_END: DefAlloc
 
@@ -447,27 +441,27 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         let header = Self::Header::new_array(size_bytes, size_class, Mark::Allocated);
 
         // write the header into the front of the allocated space
-        unsafe {
-            write(dest.space as *mut Self::Header, header);
-        }
+        let array_space = unsafe {
+            write(dest.space.as_ptr() as *mut Self::Header, header);
 
-        // calculate where the array will begin after the padded header
-        let array_space = unsafe { dest.space.add(header_size) };
+            // calculate where the array will begin after the padded header
+            let array_space = dest.space.add(header_size);
 
-        // Initialize array to zero
-        let array = unsafe { from_raw_parts_mut(array_space as *mut u8, size_bytes as usize) };
-        for byte in array {
-            *byte = 0;
-        }
+            // Initialize array to zero
+            let array = from_raw_parts_mut(array_space.as_ptr(), size_bytes as usize);
+            for byte in array {
+                *byte = 0;
+            }
 
-        // Mark this object in the block's object map
-        let object_offset = array_space.addr() - dest.block.addr();
-        unsafe {
+            // Mark this object in the block's object map
+            let object_offset = dest.block.byte_count_to(array_space);
             let mut meta = BlockMeta::attach(dest.block);
             meta.mark_object(object_offset);
-        }
 
-        Ok(RawPtr::new(array_space))
+            array_space
+        };
+
+        Ok(RawPtr::from_nonnull(array_space))
     }
     // ANCHOR_END: DefAllocArray
 
@@ -509,14 +503,14 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         // 3. trace
         // 3.1 trace the stack scan
         for ptr in stack_scan.iter() {
-            if !unsafe { Self::mark(*ptr) } {
+            if !unsafe { Self::mark(blocks, *ptr) } {
                 tracer.visit(RawPtr::new(*ptr as *const ()));
             }
         }
 
         // 3.2 trace the heap
         while let Some(object) = tracer.pop() {
-            if !unsafe { Self::mark(object.addr()) } {
+            if !unsafe { Self::mark(blocks, object.addr()) } {
                 tracer.visit(object);
             }
         }
@@ -534,6 +528,7 @@ mod tests {
     use super::*;
     use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
     use std::cell::Cell;
+    use std::num::NonZero;
     use std::slice::from_raw_parts;
 
     struct TestHeader {
@@ -777,10 +772,13 @@ mod tests {
 
         match mem.alloc(42usize) {
             Ok(ptr) => {
-                let untyped_ptr = ptr.as_untyped();
-                let block_base = (untyped_ptr.as_ptr() as usize) & constants::BLOCK_PTR_MASK;
-                let object_offset = untyped_ptr.as_ptr() as usize - block_base;
-                let meta = unsafe { BlockMeta::attach(block_base as *const u8) };
+                let ptr = ptr.cast::<u8>().as_nonnull();
+                let block_base = ptr.map_addr(|p| {
+                    let masked_p = p.get() & constants::BLOCK_PTR_MASK;
+                    unsafe { NonZero::new_unchecked(masked_p) }
+                });
+                let object_offset = unsafe { ptr.offset_from_unsigned(block_base) };
+                let meta = unsafe { BlockMeta::attach(block_base) };
                 assert!(meta.is_object_marked(object_offset));
             }
 
