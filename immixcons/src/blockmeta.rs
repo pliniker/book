@@ -3,8 +3,6 @@ use blockalloc::BlockPtr;
 use crate::constants;
 use crate::types::BlockHandle;
 
-use std::ptr::NonNull;
-
 /// Safe abstraction around line marking and the object map.
 /// Internally it's all raw pointers, bits and bytes in the block.
 // ANCHOR: DefBlockMeta
@@ -21,7 +19,7 @@ impl BlockMeta {
     /// metadata has already been initialized. This does NOT reset any metadata
     /// (unlike `BlockMeta::new`), and so is appropriate for reading/updating
     /// metadata for an existing block.
-    pub fn attach_and_reset(block: BlockHandle) -> BlockMeta {
+    pub fn _attach_and_reset(block: BlockHandle) -> BlockMeta {
         let mut meta = BlockMeta {
             lines: block.offset(constants::LINE_MARK_START),
             object_map: block.offset(constants::OBJECT_MAP_START),
@@ -65,7 +63,7 @@ impl BlockMeta {
     }
 
     /// Reset all mark flags to unmarked.
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         unsafe {
             for i in 0..constants::LINE_COUNT {
                 *self.lines.add(i).as_mut() = 0;
@@ -237,7 +235,7 @@ mod tests {
         // The second hole should be the one selected.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         meta.mark_line(0);
         meta.mark_line(1);
@@ -260,7 +258,7 @@ mod tests {
         // Should find the hole starting at the beginning of the block
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         meta.mark_line(3);
         meta.mark_line(4);
@@ -281,7 +279,7 @@ mod tests {
         // The second half of the block should be identified as a hole.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         let halfway = constants::LINE_COUNT / 2;
 
@@ -305,7 +303,7 @@ mod tests {
         // No hole should be found.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
@@ -325,7 +323,7 @@ mod tests {
         // No marked lines. Entire block is available.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let meta = BlockMeta::attach_and_reset(handle);
+        let meta = BlockMeta::_attach_and_reset(handle);
 
         let expect = Some((constants::BLOCK_CAPACITY, 0));
         let got = meta.find_next_available_hole(constants::BLOCK_CAPACITY, constants::LINE_SIZE);
@@ -340,7 +338,7 @@ mod tests {
         // Test marking and checking individual object slots
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         // Initially, no objects should be marked
         assert!(!meta.is_object_marked(0));
@@ -368,7 +366,7 @@ mod tests {
         // Test clearing marked objects
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         let offset = constants::ALLOC_ALIGN_BYTES * 10;
 
@@ -386,7 +384,7 @@ mod tests {
         // Test finding marked objects
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         // Mark objects at various positions
         meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
@@ -415,7 +413,7 @@ mod tests {
         // Test that reset clears the object map
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         // Mark several objects
         for i in 0..10 {
@@ -444,7 +442,7 @@ mod tests {
         // Test marking many consecutive objects
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         let num_objects = 100;
 
@@ -475,7 +473,8 @@ mod tests {
         // that mutations via an attached meta are visible to the original meta.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta1 = BlockMeta::attach_and_reset(handle);
+        let mut meta1 = handle.get_meta();
+        meta1.reset();
 
         meta1.mark_line(2);
         meta1.mark_object(constants::ALLOC_ALIGN_BYTES * 7);
@@ -504,7 +503,7 @@ mod tests {
         // mark_block should set the last line byte in the line marks region
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         meta.mark_block();
 
@@ -522,7 +521,7 @@ mod tests {
         // Reset should clear marked lines as well as object map
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         meta.mark_line(0);
         meta.mark_line(10);
@@ -544,7 +543,7 @@ mod tests {
         // mark_object should assert on unaligned offsets (debug build)
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         // Unaligned offset should trigger debug_assert
         meta.mark_object(constants::ALLOC_ALIGN_BYTES - 1);
@@ -557,7 +556,7 @@ mod tests {
         // clear_object asserts if offset is outside block capacity
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         // offset equal to BLOCK_CAPACITY should be out-of-bounds
         meta.clear_object(constants::BLOCK_CAPACITY);
@@ -569,7 +568,7 @@ mod tests {
         // passed is not aligned (it divides by ALLOC_ALIGN_BYTES).
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         let base = constants::ALLOC_ALIGN_BYTES * 3;
         meta.mark_object(base);
@@ -583,7 +582,7 @@ mod tests {
         // find_next_object should accept an unaligned starting offset
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         meta.mark_object(constants::ALLOC_ALIGN_BYTES * 5);
 
@@ -599,7 +598,7 @@ mod tests {
         // returned), and a subsequent larger run results in a proper hole.
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = BlockMeta::_attach_and_reset(handle);
 
         let starting_line = 10;
         let starting_at = starting_line * constants::LINE_SIZE;

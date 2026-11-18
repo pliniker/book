@@ -1,5 +1,14 @@
+/// Various pointer encapsulation types.
+///
+/// The type safety model: heap::BlockList owns Blocks.
+///
+/// To maintain safety, none of these types should ever implement Copy + Clone
+/// as that would allow the borrowing limits out of heap::BlockList to be
+/// circumvented.
 use std::num::NonZero;
 
+use crate::blockmeta::BlockMeta;
+use crate::bumpblock::BumpBlock;
 use crate::constants;
 
 use blockalloc::{Block, BlockPtr};
@@ -12,12 +21,11 @@ use blockalloc::{Block, BlockPtr};
 ///
 /// This handle is lifetime-tied to an implementation of BlockCollection so that
 /// it cannot escaped the scope of a BlockCollection.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockHandle {
     base: BlockPtr,
 }
 
-impl<'c> BlockHandle {
+impl BlockHandle {
     pub fn new(from_block: &Block) -> BlockHandle {
         BlockHandle {
             base: from_block.as_ptr(),
@@ -28,7 +36,7 @@ impl<'c> BlockHandle {
     ///
     /// There is no guarantee that the block base pointed at by the new BlockHandle
     /// is a valid Block, thus this is unsafe.
-    pub unsafe fn from_any_ptr(ptr: BlockPtr) -> BlockHandle {
+    pub unsafe fn new_without_providence(ptr: BlockPtr) -> BlockHandle {
         let block_base = ptr.map_addr(|p| {
             let masked_p = p.get() & constants::BLOCK_PTR_MASK;
             unsafe { NonZero::new_unchecked(masked_p) }
@@ -61,22 +69,29 @@ impl<'c> BlockHandle {
     pub fn byte_count_to(&self, ptr: BlockPtr) -> usize {
         unsafe { ptr.offset_from_unsigned(self.base) }
     }
-}
 
-/// A copy of a block base pointer adjusted by the line offset
-///
-/// This handle is lifetime-tied to an implementation of BlockCollection so that
-/// it cannot escaped the scope of a BlockCollection.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LinesHandle {
-    lines: BlockPtr,
-}
+    /// Get a BumpBlock instance for this block, treating it as a new, blank block.
+    /// Resets all mark bits.
+    ///
+    /// We don't implement clone for BlockHandle so this is the safe way to
+    /// get an instace of BumpBlock without consuming the handle.
+    pub fn new_bumpcursor(&self) -> BumpBlock {
+        BumpBlock::new(BlockHandle { base: self.base })
+    }
 
-/// A copy of a block base pointer adjusted by the line offset
-///
-/// This handle is lifetime-tied to an implementation of BlockCollection so that
-/// it cannot escaped the scope of a BlockCollection.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ObjectMapHandle {
-    object_map: BlockPtr,
+    /// Get a BumpBlock instance for this block without modifying any mark bits
+    ///
+    /// We don't implement clone for BlockHandle so this is the safe way to
+    /// get an instace of BumpBlock without consuming the handle.
+    pub fn attach_bumpcursor(&self) -> BumpBlock {
+        BumpBlock::attach(BlockHandle { base: self.base })
+    }
+
+    /// Get a BlockMeta instance for this block
+    ///
+    /// We don't implement clone for BlockHandle so this is the safe way to
+    /// get an instace of BlockMeta without consuming the handle.
+    pub fn get_meta(&self) -> BlockMeta {
+        BlockMeta::attach(BlockHandle { base: self.base })
+    }
 }

@@ -24,27 +24,40 @@ pub struct BumpBlock {
 impl BumpBlock {
     /// Start working with a new block, wiping lines and object map clean
     pub fn new(block: BlockHandle) -> BumpBlock {
+        let mut meta = block.get_meta();
+        meta.reset();
+
+        let cursor = block.offset(constants::BLOCK_CAPACITY);
+        let limit = block.base();
         BumpBlock {
             block: block,
-            cursor: block.offset(constants::BLOCK_CAPACITY),
-            limit: block.base(),
-            meta: BlockMeta::attach_and_reset(block),
+            cursor: cursor,
+            limit: limit,
+            meta: meta,
         }
     }
 
     /// Attach to an existing Block, making no modifications
     pub fn attach(block: BlockHandle) -> BumpBlock {
+        let meta = block.get_meta();
+        let cursor = block.offset(constants::BLOCK_CAPACITY);
+        let limit = block.base();
         BumpBlock {
             block: block,
-            cursor: block.offset(constants::BLOCK_CAPACITY),
-            limit: block.base(),
-            meta: BlockMeta::attach(block),
+            cursor: cursor,
+            limit: limit,
+            meta: meta,
         }
+    }
+
+    /// Get the metadata pointer
+    pub fn _get_meta(&self) -> BlockMeta {
+        self.block.get_meta()
     }
 
     /// Write an object into the block at the given offset. The offset is not
     /// checked for overflow, hence this function is unsafe.
-    unsafe fn write<T>(&mut self, object: T, offset: usize) -> *const T {
+    unsafe fn _write<T>(&mut self, object: T, offset: usize) -> *const T {
         let p = self.block.offset(offset).as_ptr() as *mut T;
         unsafe {
             write(p, object);
@@ -88,14 +101,22 @@ impl BumpBlock {
     }
     // ANCHOR_END: DefBumpBlockAlloc
 
+    /// Mark the object map - this is done on object allocation, hence this
+    /// function is here on the bump allocation cursor.
+    pub fn mark_object_map(&mut self, header_size: usize, header: BlockPtr) {
+        let header_offset = self.block.byte_count_to(header);
+        let object_offset = header_offset + header_size;
+        self.meta.mark_object(object_offset);
+    }
+
     /// Return the size of the hole we're positioned at
     pub fn current_hole_size(&self) -> usize {
         unsafe { self.cursor.offset_from_unsigned(self.limit) }
     }
 
     /// Return the block pointer we're working with
-    pub fn block_ptr(&self) -> BlockHandle {
-        self.block
+    pub fn _block_ptr(&self) -> BlockPtr {
+        self.block.base()
     }
 }
 
@@ -200,14 +221,14 @@ mod tests {
         let handle = BlockHandle::new(&block);
 
         // Initialize metadata and mark a line
-        let mut meta = BlockMeta::attach_and_reset(handle);
+        let mut meta = handle.get_meta();
         meta.mark_line(3);
 
         // Attach to the block (should not reset metadata)
-        let b = BumpBlock::attach(handle);
+        let b = handle.attach_bumpcursor();
 
         // block pointer should be correct
-        assert_eq!(b.block_ptr().base(), block.as_ptr());
+        assert_eq!(b._block_ptr(), block.as_ptr());
 
         // initial hole should be the entire block
         assert_eq!(b.current_hole_size(), constants::BLOCK_CAPACITY);
@@ -226,14 +247,14 @@ mod tests {
 
         // Write a u32 at offset 0
         unsafe {
-            let p = b.write::<u32>(0xDEADBEEF_u32, 0);
+            let p = b._write::<u32>(0xDEADBEEF_u32, 0);
             assert_eq!(*p, 0xDEADBEEF_u32);
         }
 
         // Write another value at a different offset
         let offset = constants::ALLOC_ALIGN_BYTES * 2;
         unsafe {
-            let p2 = b.write::<u32>(0xCAFEBABE_u32, offset);
+            let p2 = b._write::<u32>(0xCAFEBABE_u32, offset);
             assert_eq!(*p2, 0xCAFEBABE_u32);
         }
     }
@@ -246,11 +267,11 @@ mod tests {
 
         unsafe {
             // u32 write via attached bump block
-            let p1 = b.write::<u32>(0xAABBCCDD_u32, 8);
+            let p1 = b._write::<u32>(0xAABBCCDD_u32, 8);
             assert_eq!(*p1, 0xAABBCCDD_u32);
 
             // u64 write via attached bump block to force another monomorphization
-            let p2 = b.write::<u64>(0xDEADBEEFDEADBEEF_u64, 16);
+            let p2 = b._write::<u64>(0xDEADBEEFDEADBEEF_u64, 16);
             assert_eq!(*p2, 0xDEADBEEFDEADBEEF_u64);
 
             // write a small struct to exercise a third instantiation
@@ -261,7 +282,7 @@ mod tests {
             }
 
             let s = S { a: 1, b: 2 };
-            let ps = b.write::<S>(S { a: 1, b: 2 }, 32);
+            let ps = b._write::<S>(S { a: 1, b: 2 }, 32);
             assert_eq!(*ps, s);
         }
     }

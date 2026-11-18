@@ -8,7 +8,6 @@ use std::slice::from_raw_parts_mut;
 use crate::allocator::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, SizeClass, TraceVisitor,
 };
-use crate::blockmeta::BlockMeta;
 use crate::bumpblock::BumpBlock;
 use crate::constants;
 use crate::histogram::Histogram;
@@ -24,19 +23,6 @@ impl From<BlockError> for AllocError {
             BlockError::BadRequest => AllocError::BadRequest,
             BlockError::OOM => AllocError::OOM,
         }
-    }
-}
-
-/// Return value of finding a space to allocate into
-#[derive(Copy, Clone)]
-struct AllocDest {
-    block: BlockHandle,
-    space: BlockPtr,
-}
-
-impl AllocDest {
-    fn new(block: BlockHandle, space: BlockPtr) -> AllocDest {
-        AllocDest { block, space }
     }
 }
 
@@ -69,9 +55,9 @@ impl BlockList {
     fn get_new_block(&mut self) -> Result<BumpBlock, AllocError> {
         let block = Block::new(constants::BLOCK_SIZE)?;
         let handle = BlockHandle::new(&block);
-        let bumpblock = BumpBlock::new(handle);
+        let cursor = handle.new_bumpcursor();
         self.all_blocks.insert(block.addr(), block);
-        Ok(bumpblock)
+        Ok(cursor)
     }
 
     // Get an empty block, falling back to allocating a new block if there are no
@@ -80,7 +66,7 @@ impl BlockList {
         if let Some(block_base) = self.empty_blocks.pop() {
             if let Some(block) = self.all_blocks.get(&block_base) {
                 let handle = BlockHandle::new(block);
-                return Ok(BumpBlock::new(handle));
+                return Ok(handle.new_bumpcursor());
             }
         }
 
@@ -101,7 +87,7 @@ impl BlockList {
         // generate histogram
         for (block_addr, block) in self.all_blocks.iter() {
             let handle = BlockHandle::new(block);
-            let meta = BlockMeta::attach(handle);
+            let meta = handle.get_meta();
             let holes = meta.count_holes();
             self.histogram.push_block(holes, *block_addr);
         }
@@ -117,7 +103,8 @@ impl BlockList {
                     // reset block metadata via `new()`, resetting the block to
                     // new block state
                     let handle = BlockHandle::new(block);
-                    let _bump = BlockMeta::attach_and_reset(handle);
+                    let mut meta = handle.get_meta();
+                    meta.reset();
                 });
             }
         }
@@ -156,7 +143,8 @@ impl BlockList {
             self.all_blocks.entry(*block_ptr).and_modify(|block| {
                 // reset block metadata via `new()`
                 let handle = BlockHandle::new(block);
-                let _bump = BlockMeta::attach_and_reset(handle);
+                let mut meta = handle.get_meta();
+                meta.reset();
             });
         }
 
@@ -170,7 +158,11 @@ impl BlockList {
 
     /// Allocate a space for a medium object into an overflow block
     // ANCHOR: DefOverflowAlloc
-    fn find_overflow_space(&mut self, alloc_size: usize) -> Result<AllocDest, AllocError> {
+    fn find_overflow_space(
+        &mut self,
+        header_size: usize,
+        alloc_size: usize,
+    ) -> Result<BlockPtr, AllocError> {
         assert!(alloc_size <= constants::BLOCK_CAPACITY);
 
         // Take the current overflow block out so we can borrow `self` again
@@ -183,23 +175,26 @@ impl BlockList {
             // We have no blocks to work with yet so make one
             None => {
                 let mut overflow = self.pop_empty_block()?;
-                let block_ptr = overflow.block_ptr();
 
                 // earlier check for object size < block size should
                 // mean we dont fail this expectation
                 let space = overflow
                     .inner_alloc(alloc_size)
                     .expect("We expected this object to fit!");
+                overflow.mark_object_map(header_size, space);
 
                 self.overflow = Some(overflow);
 
-                return Ok(AllocDest::new(block_ptr, space));
+                return Ok(space);
             }
         };
 
-        let dest = match overflow.inner_alloc(alloc_size) {
+        let space = match overflow.inner_alloc(alloc_size) {
             // the block has a suitable hole
-            Some(space) => AllocDest::new(overflow.block_ptr(), space),
+            Some(space) => {
+                overflow.mark_object_map(header_size, space);
+                space
+            }
 
             // the block does not have a suitable hole
             None => {
@@ -207,53 +202,60 @@ impl BlockList {
                 overflow = new_overflow;
 
                 let space = overflow.inner_alloc(alloc_size).expect("Unexpected error!");
-                AllocDest::new(overflow.block_ptr(), space)
+                overflow.mark_object_map(header_size, space);
+                space
             }
         };
 
         self.overflow = Some(overflow);
-        Ok(dest)
+        Ok(space)
     }
     // ANCHOR_END: DefOverflowAlloc
     /// Find a space for a small, medium or large object
 
     // TODO this just allocates a new block, but should look at
     // recycled blocks first
-    fn find_space(
+    fn alloc_space(
         &mut self,
         alloc_size: usize,
+        header_size: usize,
         size_class: SizeClass,
-    ) -> Result<AllocDest, AllocError> {
+    ) -> Result<BlockPtr, AllocError> {
         // TODO handle large objects
         if size_class == SizeClass::Large {
             // simply fail for objects larger than the block size
             return Err(AllocError::BadRequest);
         }
 
-        let dest = match self.head {
+        let space = match self.head {
             // We already have a block to try to use...
             Some(ref mut head) => {
                 // If this is a medium object that doesn't fit in the hole, use overflow
                 if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
-                    return self.find_overflow_space(alloc_size);
-                }
+                    self.find_overflow_space(header_size, alloc_size)?
+                } else {
+                    // This is a small object that might fit in the current block...
+                    match head.inner_alloc(alloc_size) {
+                        // the block has a suitable hole
+                        Some(space) => {
+                            head.mark_object_map(header_size, space);
+                            space
+                        }
 
-                // This is a small object that might fit in the current block...
-                match head.inner_alloc(alloc_size) {
-                    // the block has a suitable hole
-                    Some(space) => AllocDest::new(head.block_ptr(), space),
+                        // the block does not have a suitable hole so allocate a new head block
+                        None => {
+                            // TODO use pop_recycled_block()
+                            let block = Block::new(constants::BLOCK_SIZE)?;
+                            let handle = BlockHandle::new(&block);
+                            *head = handle.new_bumpcursor();
 
-                    // the block does not have a suitable hole so allocate a new head block
-                    None => {
-                        // TODO use pop_recycled_block()
-                        let block = Block::new(constants::BLOCK_SIZE)?;
-                        let handle = BlockHandle::new(&block);
-                        *head = BumpBlock::new(handle);
+                            self.all_blocks.insert(block.addr(), block);
 
-                        self.all_blocks.insert(block.addr(), block);
+                            let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
+                            head.mark_object_map(header_size, space);
 
-                        let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
-                        AllocDest::new(head.block_ptr(), space)
+                            space
+                        }
                     }
                 }
             }
@@ -263,7 +265,7 @@ impl BlockList {
                 // TODO use pop_recycled_block()
                 let block = Block::new(constants::BLOCK_SIZE)?;
                 let handle = BlockHandle::new(&block);
-                let mut head = BumpBlock::new(handle);
+                let mut head = handle.new_bumpcursor();
 
                 self.all_blocks.insert(block.addr(), block);
 
@@ -273,13 +275,15 @@ impl BlockList {
                     .inner_alloc(alloc_size)
                     .expect("We expected this object to fit!");
 
+                head.mark_object_map(header_size, space);
+
                 self.head = Some(head);
 
-                AllocDest::new(handle, space)
+                space
             }
         };
 
-        Ok(dest)
+        Ok(space)
     }
 
     /// Using best effort logic, estimate if a pointer is a valid heap pointer.
@@ -295,7 +299,7 @@ impl BlockList {
         if let Some(ref block) = self.all_blocks.get(&block_base) {
             let block_offset = ptr & !constants::BLOCK_PTR_MASK;
             let handle = BlockHandle::new(block);
-            let meta = BlockMeta::attach(handle);
+            let meta = handle.get_meta();
             if block_offset < constants::ALLOC_UPPER_EXTENT && meta.is_object_marked(block_offset) {
                 return Some(ptr);
             }
@@ -311,8 +315,8 @@ impl BlockList {
     unsafe fn mark(&self, addr: usize) {
         let block_base = NonNull::new((addr & constants::BLOCK_PTR_MASK) as *mut u8)
             .expect("Resolved block base from pointer: should not be null!");
-        let handle = unsafe { BlockHandle::from_any_ptr(block_base) };
-        let mut block_meta = BlockMeta::attach(handle);
+        let handle = unsafe { BlockHandle::new_without_providence(block_base) };
+        let mut block_meta = handle.get_meta();
 
         // 1. mark the line
         let ptr_offset = addr & !constants::BLOCK_PTR_MASK;
@@ -345,13 +349,14 @@ impl<H: AllocHeader> ImmixConsHeap<H> {
     /// Find a space for a small, medium or large object
     // TODO this just allocates a new block, but should look at
     // recycled blocks first
-    fn find_space(
+    fn alloc_space(
         &self,
         alloc_size: usize,
+        header_size: usize,
         size_class: SizeClass,
-    ) -> Result<AllocDest, AllocError> {
+    ) -> Result<BlockPtr, AllocError> {
         let blocks = unsafe { &mut *self.blocks.get() };
-        blocks.find_space(alloc_size, size_class)
+        blocks.alloc_space(alloc_size, header_size, size_class)
     }
 
     /// This function takes care of marking block attributes
@@ -397,26 +402,21 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the object
-        let dest = self.find_space(total_size, size_class)?;
+        let space = self.alloc_space(total_size, header_size, size_class)?;
 
         // instantiate an object header for type T, setting the mark bit to "allocated"
         let header = Self::Header::new::<T>(object_size as ArraySize, size_class, Mark::Allocated);
 
         // write the header into the front of the allocated space
         unsafe {
-            write(dest.space.as_ptr() as *mut Self::Header, header);
+            write(space.as_ptr() as *mut Self::Header, header);
         }
 
         // write the object into the allocated space after the header
-        let object_space = unsafe { dest.space.add(header_size) };
+        let object_space = unsafe { space.add(header_size) };
         unsafe {
             write(object_space.as_ptr() as *mut T, object);
         }
-
-        // Mark this object in the block's object map
-        let object_offset = dest.block.byte_count_to(object_space);
-        let mut meta = BlockMeta::attach(dest.block);
-        meta.mark_object(object_offset);
 
         // return a pointer to the object in the allocated space
         Ok(RawPtr::from_nonnull(object_space.cast::<T>()))
@@ -435,28 +435,23 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         let size_class = SizeClass::get_for_size(total_size)?;
 
         // attempt to allocate enough space for the header and the array
-        let dest = self.find_space(total_size, size_class)?;
+        let space = self.alloc_space(total_size, header_size, size_class)?;
 
         // instantiate an object header for an array, setting the mark bit to "allocated"
         let header = Self::Header::new_array(size_bytes, size_class, Mark::Allocated);
 
         // write the header into the front of the allocated space
         let array_space = unsafe {
-            write(dest.space.as_ptr() as *mut Self::Header, header);
+            write(space.as_ptr() as *mut Self::Header, header);
 
             // calculate where the array will begin after the padded header
-            let array_space = dest.space.add(header_size);
+            let array_space = space.add(header_size);
 
             // Initialize array to zero
             let array = from_raw_parts_mut(array_space.as_ptr(), size_bytes as usize);
             for byte in array {
                 *byte = 0;
             }
-
-            // Mark this object in the block's object map
-            let object_offset = dest.block.byte_count_to(array_space);
-            let mut meta = BlockMeta::attach(dest.block);
-            meta.mark_object(object_offset);
 
             array_space
         };
@@ -526,6 +521,7 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 mod tests {
 
     use super::*;
+    use crate::HeapTracer;
     use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
     use std::cell::Cell;
     use std::num::NonZero;
@@ -777,8 +773,9 @@ mod tests {
                     let masked_p = p.get() & constants::BLOCK_PTR_MASK;
                     unsafe { NonZero::new_unchecked(masked_p) }
                 });
+                let handle = unsafe { BlockHandle::new_without_providence(block_base) };
                 let object_offset = unsafe { ptr.offset_from_unsigned(block_base) };
-                let meta = unsafe { BlockMeta::attach(block_base) };
+                let meta = handle.get_meta();
                 assert!(meta.is_object_marked(object_offset));
             }
 
