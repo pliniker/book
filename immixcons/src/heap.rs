@@ -408,15 +408,13 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
         let header = Self::Header::new::<T>(object_size as ArraySize, size_class, Mark::Allocated);
 
         // write the header into the front of the allocated space
-        unsafe {
+        let object_space = unsafe {
             write(space.as_ptr() as *mut Self::Header, header);
-        }
-
-        // write the object into the allocated space after the header
-        let object_space = unsafe { space.add(header_size) };
-        unsafe {
+            // write the object into the allocated space after the header
+            let object_space = space.add(header_size);
             write(object_space.as_ptr() as *mut T, object);
-        }
+            object_space
+        };
 
         // return a pointer to the object in the allocated space
         Ok(RawPtr::from_nonnull(object_space.cast::<T>()))
