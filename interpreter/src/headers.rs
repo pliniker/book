@@ -4,7 +4,7 @@ use immixcons::{
     AllocHeader, AllocObject, AllocRaw, AllocTypeId, ArraySize, Mark, RawPtr, SizeClass,
 };
 
-use crate::array::{ArrayU16, ArrayU32, ArrayU8};
+use crate::array::{ArrayU8, ArrayU16, ArrayU32};
 use crate::bytecode::{ArrayOpcode, ByteCode, InstructionStream};
 use crate::dict::Dict;
 use crate::function::{Function, Partial};
@@ -12,7 +12,7 @@ use crate::list::List;
 use crate::memory::HeapStorage;
 use crate::number::NumberObject;
 use crate::pair::Pair;
-use crate::pointerops::{Tagged, TAG_MASK};
+use crate::pointerops::{TAG_MASK, Tagged};
 use crate::symbol::Symbol;
 use crate::taggedptr::FatPtr;
 use crate::text::Text;

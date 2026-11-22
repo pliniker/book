@@ -2,7 +2,7 @@ use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::ptr::{write, NonNull};
+use std::ptr::{NonNull, write};
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
@@ -489,8 +489,8 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 mod tests {
 
     use super::*;
-    use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
     use crate::HeapTracer;
+    use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
     use std::cell::Cell;
     use std::num::NonZero;
     use std::slice::from_raw_parts;

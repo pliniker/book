@@ -2,8 +2,8 @@
 /// Currently implemented on top of immixcons without any gc which includes unnecessary
 /// overhead.
 use immixcons::{
-    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, ImmixConsHeap, Mark,
-    RawPtr, SizeClass, TraceVisitor,
+    AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, ImmixConsHeap, Mark, RawPtr,
+    SizeClass, TraceVisitor,
 };
 
 use crate::headers::TypeList;

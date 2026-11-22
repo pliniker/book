@@ -2,7 +2,7 @@ use immixcons::TraceVisitor;
 use std::cell::Cell;
 use std::fmt;
 
-use crate::error::{err_eval, RuntimeError, SourcePos};
+use crate::error::{RuntimeError, SourcePos, err_eval};
 use crate::memory::MutatorView;
 use crate::printer::Print;
 use crate::safeptr::{MutatorScope, ScopedPtr, TaggedCellPtr, TaggedScopedPtr};
