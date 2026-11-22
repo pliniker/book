@@ -13,7 +13,7 @@ use crate::types::BlockHandle;
 /// This object does not OWN a block, is merely a temporary scaffolding
 /// around a current block.
 // ANCHOR: DefBumpBlock
-pub struct BumpBlock {
+pub struct BlockBumpPtr {
     block: BlockHandle,
     cursor: BlockPtr,
     limit: BlockPtr,
@@ -21,15 +21,15 @@ pub struct BumpBlock {
 }
 // ANCHOR_END: DefBumpBlock
 
-impl BumpBlock {
+impl BlockBumpPtr {
     /// Start working with a new block, wiping lines and object map clean
-    pub fn new(block: BlockHandle) -> BumpBlock {
+    pub fn new(block: BlockHandle) -> BlockBumpPtr {
         let mut meta = block.get_meta();
         meta.reset();
 
         let cursor = block.offset(constants::BLOCK_CAPACITY);
         let limit = block.base();
-        BumpBlock {
+        BlockBumpPtr {
             block: block,
             cursor: cursor,
             limit: limit,
@@ -38,11 +38,11 @@ impl BumpBlock {
     }
 
     /// Attach to an existing Block, making no modifications
-    pub fn attach(block: BlockHandle) -> BumpBlock {
+    pub fn attach(block: BlockHandle) -> BlockBumpPtr {
         let meta = block.get_meta();
         let cursor = block.offset(constants::BLOCK_CAPACITY);
         let limit = block.base();
-        BumpBlock {
+        BlockBumpPtr {
             block: block,
             cursor: cursor,
             limit: limit,
@@ -133,7 +133,7 @@ mod tests {
     // and return the number of values allocated.
     // Also assert that all allocated values are unchanged as allocation
     // proceeds.
-    fn loop_check_allocate(b: &mut BumpBlock) -> usize {
+    fn loop_check_allocate(b: &mut BlockBumpPtr) -> usize {
         let mut v = Vec::new();
         let mut index = 0;
 
@@ -161,7 +161,7 @@ mod tests {
     fn test_empty_block() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut b = BumpBlock::new(handle);
+        let mut b = BlockBumpPtr::new(handle);
 
         let count = loop_check_allocate(&mut b);
         let expect = constants::BLOCK_CAPACITY / TEST_UNIT_SIZE;
@@ -175,7 +175,7 @@ mod tests {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
         // This block has an available hole as the second half of the block
-        let mut b = BumpBlock::new(handle);
+        let mut b = BlockBumpPtr::new(handle);
 
         for i in 0..(constants::LINE_COUNT / 2) {
             b.meta.mark_line(i);
@@ -199,7 +199,7 @@ mod tests {
 
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut b = BumpBlock::new(handle);
+        let mut b = BlockBumpPtr::new(handle);
 
         for i in 0..constants::LINE_COUNT {
             if i % 2 == 0 {
@@ -243,7 +243,7 @@ mod tests {
     fn test_write_writes_at_offset() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut b = BumpBlock::new(handle);
+        let mut b = BlockBumpPtr::new(handle);
 
         // Write a u32 at offset 0
         unsafe {
@@ -263,7 +263,7 @@ mod tests {
     fn test_attach_write_monomorphization() {
         let block = Block::new(constants::BLOCK_SIZE).unwrap();
         let handle = BlockHandle::new(&block);
-        let mut b = BumpBlock::attach(handle);
+        let mut b = BlockBumpPtr::attach(handle);
 
         unsafe {
             // u32 write via attached bump block

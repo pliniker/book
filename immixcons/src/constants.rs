@@ -63,3 +63,4 @@ pub const LARGE_OBJECT_MAX: usize = MAX_ALLOC_SIZE;
 
 // Block management
 pub const BLOCKS_KEEP_EMPTY_COUNT: usize = 4;
+pub const BLOCKS_RECYCLE_MIN_HOLES: usize = LINE_COUNT / 2;

@@ -2,13 +2,13 @@ use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use std::ptr::{NonNull, write};
+use std::ptr::{write, NonNull};
 use std::slice::from_raw_parts_mut;
 
 use crate::allocator::{
     AllocError, AllocHeader, AllocObject, AllocRaw, ArraySize, Mark, SizeClass, TraceVisitor,
 };
-use crate::bumpblock::BumpBlock;
+use crate::bumpblock::BlockBumpPtr;
 use crate::constants;
 use crate::histogram::Histogram;
 use crate::rawptr::RawPtr;
@@ -32,8 +32,8 @@ impl From<BlockError> for AllocError {
 //  - large objects
 // ANCHOR: DefBlockList
 struct BlockList {
-    head: Option<BumpBlock>,
-    overflow: Option<BumpBlock>,
+    head: Option<BlockBumpPtr>,
+    overflow: Option<BlockBumpPtr>,
     empty_blocks: Vec<usize>,
     all_blocks: HashMap<usize, Block>,
     histogram: Histogram,
@@ -52,7 +52,7 @@ impl BlockList {
     }
 
     // Allocate a block and add it to the storage bank
-    fn get_new_block(&mut self) -> Result<BumpBlock, AllocError> {
+    fn get_new_block(&mut self) -> Result<BlockBumpPtr, AllocError> {
         let block = Block::new(constants::BLOCK_SIZE)?;
         let handle = BlockHandle::new(&block);
         let cursor = handle.new_bumpcursor();
@@ -62,7 +62,7 @@ impl BlockList {
 
     // Get an empty block, falling back to allocating a new block if there are no
     // empty blocks
-    fn pop_empty_block(&mut self) -> Result<BumpBlock, AllocError> {
+    fn pop_empty_block(&mut self) -> Result<BlockBumpPtr, AllocError> {
         if let Some(block_base) = self.empty_blocks.pop() {
             if let Some(block) = self.all_blocks.get(&block_base) {
                 let handle = BlockHandle::new(block);
@@ -76,10 +76,15 @@ impl BlockList {
 
     // Get a recycled block, falling back to the empty block list if no suitable
     // block exists
-    fn pop_recycled_block(&mut self) -> Result<BumpBlock, AllocError> {
-        // TODO
-        // Look for histogram-managed blocks with at least x holes
-        unimplemented!()
+    fn pop_recycled_block(&mut self) -> Result<BlockBumpPtr, AllocError> {
+        if let Some(block_base) = self.histogram.pop_next_recycleable() {
+            if let Some(block) = self.all_blocks.get(&block_base) {
+                let handle = BlockHandle::new(block);
+                return Ok(handle.new_bumpcursor());
+            }
+        }
+
+        self.pop_empty_block()
     }
 
     /// Manage empty blocks and recycling blocks
@@ -141,13 +146,13 @@ impl BlockList {
         // lines etc shouldn't need to be cleared since this is an empty block
         for block_ptr in self.empty_blocks.iter() {
             self.all_blocks.entry(*block_ptr).and_modify(|block| {
-                // reset block metadata via `new()`
                 let handle = BlockHandle::new(block);
                 let mut meta = handle.get_meta();
                 meta.reset();
             });
         }
 
+        // TODO
         // Occupied blocks only:
         // - clear block mark bit
         // - for unmarked lines, clear object map bits
@@ -211,10 +216,9 @@ impl BlockList {
         Ok(space)
     }
     // ANCHOR_END: DefOverflowAlloc
-    /// Find a space for a small, medium or large object
 
-    // TODO this just allocates a new block, but should look at
-    // recycled blocks first
+    /// Find a space for a small, medium or large object
+    /// TODO: large object space
     fn alloc_space(
         &mut self,
         alloc_size: usize,
@@ -227,63 +231,29 @@ impl BlockList {
             return Err(AllocError::BadRequest);
         }
 
-        let space = match self.head {
-            // We already have a block to try to use...
-            Some(ref mut head) => {
-                // If this is a medium object that doesn't fit in the hole, use overflow
-                if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
-                    self.find_overflow_space(header_size, alloc_size)?
-                } else {
-                    // This is a small object that might fit in the current block...
-                    match head.inner_alloc(alloc_size) {
-                        // the block has a suitable hole
-                        Some(space) => {
-                            head.mark_object_map(header_size, space);
-                            space
-                        }
-
-                        // the block does not have a suitable hole so allocate a new head block
-                        None => {
-                            // TODO use pop_recycled_block()
-                            let block = Block::new(constants::BLOCK_SIZE)?;
-                            let handle = BlockHandle::new(&block);
-                            *head = handle.new_bumpcursor();
-
-                            self.all_blocks.insert(block.addr(), block);
-
-                            let space = head.inner_alloc(alloc_size).expect("Unexpected error!");
-                            head.mark_object_map(header_size, space);
-
-                            space
-                        }
-                    }
-                }
-            }
-
-            // We have no blocks to work with yet so make one
-            None => {
-                // TODO use pop_recycled_block()
-                let block = Block::new(constants::BLOCK_SIZE)?;
-                let handle = BlockHandle::new(&block);
-                let mut head = handle.new_bumpcursor();
-
-                self.all_blocks.insert(block.addr(), block);
-
-                // earlier check for object size < block size should
-                // mean we dont fail this expectation
-                let space = head
-                    .inner_alloc(alloc_size)
-                    .expect("We expected this object to fit!");
-
-                head.mark_object_map(header_size, space);
-
-                self.head = Some(head);
-
-                space
-            }
+        let mut head = match self.head.take() {
+            Some(head) => head,
+            None => self.pop_recycled_block()?,
         };
 
-        Ok(space)
+        if size_class == SizeClass::Medium && alloc_size > head.current_hole_size() {
+            let space = self.find_overflow_space(header_size, alloc_size)?;
+            head.mark_object_map(header_size, space);
+            self.head = Some(head);
+            return Ok(space);
+        }
+
+        if let Some(space) = head.inner_alloc(alloc_size) {
+            head.mark_object_map(header_size, space);
+            self.head = Some(head);
+            return Ok(space);
+        } else {
+            head = self.pop_recycled_block()?;
+            let space = head.inner_alloc(alloc_size).unwrap();
+            head.mark_object_map(header_size, space);
+            self.head = Some(head);
+            return Ok(space);
+        }
     }
 
     /// Using best effort logic, estimate if a pointer is a valid heap pointer.
@@ -519,8 +489,8 @@ impl<H: AllocHeader> AllocRaw for ImmixConsHeap<H> {
 mod tests {
 
     use super::*;
-    use crate::HeapTracer;
     use crate::allocator::{AllocObject, AllocRaw, AllocTypeId, Mark, SizeClass, TraceVisitor};
+    use crate::HeapTracer;
     use std::cell::Cell;
     use std::num::NonZero;
     use std::slice::from_raw_parts;
@@ -816,7 +786,7 @@ mod tests {
         }
 
         let mut tracer = HeapTracer::new();
-        mem.gc(&mut tracer);
+        mem.gc(&mut tracer).unwrap();
 
         // now they should be marked
         for ptr in obs {
@@ -836,7 +806,7 @@ mod tests {
         }
 
         let mut tracer = TraceProxy::new();
-        mem.gc(&mut tracer);
+        mem.gc(&mut tracer).unwrap();
 
         // such unsafe!
         unsafe {

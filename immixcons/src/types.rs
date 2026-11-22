@@ -8,7 +8,7 @@
 use std::num::NonZero;
 
 use crate::blockmeta::BlockMeta;
-use crate::bumpblock::BumpBlock;
+use crate::bumpblock::BlockBumpPtr;
 use crate::constants;
 
 use blockalloc::{Block, BlockPtr};
@@ -75,16 +75,16 @@ impl BlockHandle {
     ///
     /// We don't implement clone for BlockHandle so this is the safe way to
     /// get an instace of BumpBlock without consuming the handle.
-    pub fn new_bumpcursor(&self) -> BumpBlock {
-        BumpBlock::new(BlockHandle { base: self.base })
+    pub fn new_bumpcursor(&self) -> BlockBumpPtr {
+        BlockBumpPtr::new(BlockHandle { base: self.base })
     }
 
     /// Get a BumpBlock instance for this block without modifying any mark bits
     ///
     /// We don't implement clone for BlockHandle so this is the safe way to
     /// get an instace of BumpBlock without consuming the handle.
-    pub fn attach_bumpcursor(&self) -> BumpBlock {
-        BumpBlock::attach(BlockHandle { base: self.base })
+    pub fn attach_bumpcursor(&self) -> BlockBumpPtr {
+        BlockBumpPtr::attach(BlockHandle { base: self.base })
     }
 
     /// Get a BlockMeta instance for this block
